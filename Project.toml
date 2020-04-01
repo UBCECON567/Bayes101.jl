@@ -1,0 +1,13 @@
+name = "Bayes101"
+uuid = "27b43cfa-94f7-495e-87f2-51cc007c1af3"
+authors = ["Paul Schrimpf <paul.schrimpf@gmail.com>"]
+version = "0.1.0"
+
+[compat]
+julia = "1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
