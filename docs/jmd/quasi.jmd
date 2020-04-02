@@ -1,0 +1,104 @@
+---
+title       : "Quasi-Bayesian Methods"
+subtitle    : ""
+author      : Paul Schrimpf
+date        : `j using Dates; print(Dates.today())`
+bibliography: "bayes.bib"
+link-citations: true
+options:
+      out_width : 100%
+      wrap : true
+      fig_width : 800
+      dpi : 192
+---
+
+[![](https://i.creativecommons.org/l/by-sa/4.0/88x31.png)](http://creativecommons.org/licenses/by-sa/4.0/)
+
+This work is licensed under a [Creative Commons Attribution-ShareAlike
+4.0 International
+License](http://creativecommons.org/licenses/by-sa/4.0/) 
+
+
+```julia
+using Plots, Distributions
+Plots.pyplot()
+```
+    
+# Introduction
+
+Traditional bayesian methods require a fully specified statistical
+model, so that a likelihood can be calculated. In particular, this
+requires specifying the distribution of error terms.  In IO, and
+economics more broadly, many applied models avoid placing
+distributional assumptions on error terms, and instead use GMM for
+estimation. 
+
+There are two ways to convert a GMM model into something suitable for
+Bayesian methods. One is to just add distributional assumptions to the
+error terms. [@jiang2009] applies this approach to a random
+coefficients demand model. 
+
+A second approach is the Quasi-Bayesian approach of
+[@chernozhukov2003]. In this approach, you simply use the GMM
+objective function in place of the likelihood. We will look at it in
+some detail.
+
+# Random Coefficients IV Logit
+
+As a working example, we'll use a random coefficients logit with
+endogeneity. We will use Turing.jl, which is a fairly convenient way
+to both specify the likelihood and simulate the model.
+
+```julia
+using Turing, FastGaussQuadrature
+
+@model rcivlogit(x=missing, z=missing, s=missing;
+                 N=size(x,1), J=size(x,2), ν=gausshermite(12), M=1000,
+                 ::type{R}=Float64) where {R <: Real} =
+begin
+
+  ξ = Matrix{R}(undef, J,N)
+  # Priors
+  β ~ Normal(0, 20.0)
+  σ ~ InverseGamma(2,3)
+  ρ ~ Normal(0, 20.0)
+  Ω ~ InverseWishart(J+3, I)
+  Σx ~ InverseWishart(J+3, I)
+  
+  if (ismissing(x))
+    x = Matrix{R}(undef, J,N)
+  end
+  if ismissing(s)
+    s = Matrix{R}(undef, J,N)
+  end
+  if (ismissing(z))
+    z = randn(J,N)    
+  end
+
+  μ = similar(x[1,1]*β, J, length(ν))
+  for i in 1:N
+    ξ[:,i] ~ MvNormal(0, Ω)
+    x[:,i] ~ MvNormal(π*z + ρ*ξ, Σx)
+    for j in 1:J
+      for k in 1:length(ν[1])
+        μ[j,k] = x[j,i]*β .+ x[j,i]*σ*ν[1][k] + ξ[j,i]
+      end      
+    end
+    μ .= exp(μ)
+    for k in 1:length(ν[1])
+      μ[:,k] ./ (1 + sum(μ[:,k]))
+    end
+    s[i] ~ Multinomial(M, μ*ν[2])
+  end
+  return(x=x, z=z, s=s, ξ=ξ, β=β, σ=σ, ρ=ρ, Σx=Σx, Ω=Ω)
+end
+```
+
+TO BE CONTINUED
+
+## About
+
+This meant to accompany [these slides on Bayesian methods in IO.](https://faculty.arts.ubc.ca/pschrimpf/565/11-bayesianEstimation.pdf) 
+
+This document was created using Weave.jl. The code is available in [on
+github](https://github.com/UBCECON567/Bayes101.jl).

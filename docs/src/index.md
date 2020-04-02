@@ -1,8 +1,14 @@
 # Bayes101.jl
 
-```@index
-```
+These notes and examples are meant to accompany the slides at https://faculty.arts.ubc.ca/pschrimpf/565/565.html
 
-```@autodocs
-Modules = [Bayes101]
-```
+- MCMC sampling methods: ols.jmd
+- Quasi-Bayesian: quasi.jmd
+
+
+<!-- ```@index -->
+<!-- ``` -->
+
+<!-- ```@autodocs -->
+<!-- Modules = [Bayes101] -->
+<!-- ``` -->
