@@ -122,6 +122,14 @@
               <ul class="nav flex-column">
               </ul>
             </li>
+            <li class="nav-item" data-level="2"><a href="#nuts" class="nav-link">NUTS</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-level="2"><a href="#turingjl" class="nav-link">Turing.jl</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
             <li class="nav-item" data-level="2"><a href="#about" class="nav-link">About</a>
               <ul class="nav flex-column">
               </ul>
@@ -155,18 +163,9 @@ y_i = x_i \beta + \epsilon_i
   y = x*β + randn(N)*σ
   return(x, y)
 end
-x, y = simulateOLS(N=Int(1e2), β=ones(2), σ=1)
+x, y = simulateOLS(N=Int(1e2), β=ones(2), σ=1);
 </code></pre>
 
-<pre><code>([0.24028672132092774 0.1610425415770581; 0.8063626454312611 -1.09488538598
-77512; … ; -0.723156846407223 0.028510765138135233; -2.2069599708500887 1.2
-90874681127001], [0.9241041896457489, -0.7448390909274403, 1.63168824478042
-97, -1.3561846102324333, -1.2338603318120267, -1.7819278865795871, -0.83995
-89022316865, 1.127621561108231, -0.41848210142260334, -1.239660418302705  …
-  -0.16992286107408822, 0.8346837701491645, -0.11998103892739115, 1.8443011
-72361067, -1.7372207959226003, 5.183723095097619, -1.000290388265417, -1.25
-1402129826904, -1.496911050525861, -2.6735755810429866])
-</code></pre>
 <h2 id="computing-posteriors">Computing Posteriors<a class="headerlink" href="#computing-posteriors" title="Permanent link">&para;</a></h2>
 <p>To calculate the posterior distribution of $\beta$ given the $x$ and
 $y$, we use a conditional version of Bayes’ rule.</p>
@@ -199,7 +198,7 @@ end
 <p>If we assume that the prior for $\beta$ is normal, <script type="math/tex; mode=display">
 \beta|\sigma \sim N(0, \tau^2 I_k)
 </script> then the posterior can be computed exactly. It is: <script type="math/tex; mode=display">
-    \beta|x, y, \sigma \sim N\left( (x'x/\sigma^2 + I/\tau^2)^{-1} x'y/\sigma^2,  (x'x/\sigma^2 + I/\tau^2)^{-1})
+    \beta|x, y, \sigma \sim N\left( (x'x/\sigma^2 + I/\tau^2)^{-1} x'y/\sigma^2,  (x'x/\sigma^2 + I/\tau^2)^{-1}\right)
 </script>
 </p>
 <pre><code class="julia">function posterior(β, σ, x, y, τ)
@@ -240,7 +239,7 @@ end
 <p>When using Metropolis-Hastings, the proposal density plays a key role.
 The close the proposal is to the posterior, the faster the chain
 converges.</p>
-<p>One common choice of proposal distribution is the random walk— draw
+<p>One common choice of proposal distribution is the random walk–draw
 candidate parameters from $N(\theta, s)$. Let’s try it.</p>
 <pre><code class="julia">τ = 10.0
 k = size(x,2)
@@ -248,7 +247,7 @@ k = size(x,2)
 for s in [0.01, 0.1, 1.0, 10.0]
   rwβ = mhchain(zeros(k), Int(1e5), 
                 β-&gt;exp(loglike(β, σ, x, y)),
-                β-&gt;pdf(MvNormal(zeros(k), I*τ), β),
+                β-&gt;pdf(MvNormal(zeros(k), τ), β),
                 β-&gt;MvNormal(β, s*I))
 
   lims=(0.5, 1.5)
@@ -348,7 +347,7 @@ function hmcstep(θ, logdens, ϵ=0.1, L=5;
   return(u &lt; α ? θnew : θ)
 end
 
-function hmcchain(θ0, iterations, logdens, ∇logdens=θ-&gt;Zygotes.gradient(logdens, θ)[1]
+function hmcchain(θ0, iterations, logdens, ∇logdens=θ-&gt;Zygote.gradient(logdens, θ)[1]
                   ; ϵ=0.1, L=5, M=I)
   θ = similar(θ0, length(θ0), iterations)
   θ[:,1] .= θ0
@@ -359,7 +358,7 @@ function hmcchain(θ0, iterations, logdens, ∇logdens=θ-&gt;Zygotes.gradient(l
 end
 
 
-logp = β-&gt;(loglike(β, σ, x, y) + logpdf(MvNormal(zeros(k), I*τ), β))
+logp = β-&gt;(loglike(β, σ, x, y) + logpdf(MvNormal(zeros(k), τ), β))
 ∇logp(β) = ForwardDiff.gradient(logp, β)
 for ϵ in [1e-3, 0.1]
   for L in [2, 10]
@@ -379,13 +378,13 @@ end
 </code></pre>
 
 <pre><code>(ϵ, L) = (0.001, 2)
-  1.942575 seconds (16.88 M allocations: 832.437 MiB, 9.73% gc time)
+  2.058724 seconds (16.52 M allocations: 824.979 MiB, 10.34% gc time)
 (ϵ, L) = (0.001, 10)
-  7.078797 seconds (78.05 M allocations: 3.641 GiB, 9.95% gc time)
+  7.335227 seconds (76.23 M allocations: 3.599 GiB, 10.76% gc time)
 (ϵ, L) = (0.1, 2)
-  1.491165 seconds (15.98 M allocations: 788.496 MiB, 9.56% gc time)
+  1.542728 seconds (15.60 M allocations: 779.647 MiB, 10.41% gc time)
 (ϵ, L) = (0.1, 10)
-  7.070048 seconds (78.05 M allocations: 3.641 GiB, 9.94% gc time)
+  7.259481 seconds (76.23 M allocations: 3.599 GiB, 10.37% gc time)
 </code></pre>
 <p><img alt="" src="../figures/ols_8_1.png" /> <img alt="" src="../figures/ols_8_2.png" />
 <img alt="" src="../figures/ols_8_3.png" /> <img alt="" src="../figures/ols_8_4.png" /></p>
@@ -394,14 +393,91 @@ the chain performs. If $\epsilon$ or $L$ is too large, then many
 proposals will get rejected. If $\epsilon L$ is too small, then the
 draws will be very close together, and it will take more iterations of
 the chain to explore the space.</p>
+<h2 id="nuts">NUTS<a class="headerlink" href="#nuts" title="Permanent link">&para;</a></h2>
 <p>The No-U-Turn-Sample (NUTS) ((Hoffman and Gelman
-<a href="#ref-hoffman2014">2014</a>)) automatically chooses $L$ and $\epsilon$.
-<a href="https://github.com/tpapp/DynamicHMC.jl">DynamicHMC.jl</a> is a Julia
-implementation. <a href="https://mc-stan.org/">Stan</a> is (non-Julia, but callable
-from Julia) software for Bayesian modelling that largely uses NUTS for
-sampling. <a href="https://github.com/TuringLang/Turing.jl">Turing.jl</a> is a
-probabilistic programming language (similar to STAN or BUGS), built on
-top of Julia.</p>
+<a href="#ref-hoffman2014">2014</a>)) algorithmically chooses $L$, $\epsilon$, and
+$M$. <a href="https://mc-stan.org/">Stan</a> is (non-Julia, but callable from
+Julia) software for Bayesian modelling that largely uses NUTS for
+sampling. <a href="https://github.com/tpapp/DynamicHMC.jl">DynamicHMC.jl</a> is a
+Julia implementation. Let’s try it out.</p>
+<pre><code class="julia">using DynamicHMC, Random, LogDensityProblems
+struct LinearRegressionKnownSigma{T}
+  y::Vector{T}
+  x::Matrix{T}
+  σ::T
+  τ::T
+end
+function LogDensityProblems.capabilities(::Type{&lt;:LinearRegressionKnownSigma})
+  LogDensityProblems.LogDensityOrder{0}()
+end
+LogDensityProblems.dimension(lr::LinearRegressionKnownSigma) = size(lr.x,2)
+function LogDensityProblems.logdensity(lr::LinearRegressionKnownSigma, β)
+  k = size(x,2)
+  return(logpdf(MvNormal(zeros(k), lr.τ), β) +   
+         loglikelihood(Normal(0, σ), y - x*β))
+end
+lr = LinearRegressionKnownSigma(y,x,σ,τ)
+∇logposterior=ADgradient(:Zygote, lr)
+
+@time results=DynamicHMC.mcmc_keep_warmup(Random.GLOBAL_RNG, ∇logposterior, 500;
+                                          warmup_stages=
+                                          default_warmup_stages(init_steps=50,
+                                                                middle_steps=100,
+                                                                doubling_stages=2));
+</code></pre>
+
+<pre><code>9.116231 seconds (47.66 M allocations: 1.691 GiB, 5.40% gc time)
+</code></pre>
+<pre><code class="julia">dhβ = hcat(results.inference.chain...)
+h=histogram(dhβ', bins=100, labels=[&quot;β₁&quot; &quot;β₂&quot;], fillalpha=0.5, linealpha=0,
+            normalize=:pdf, xlim=lims, legend=false)
+h2=histogram2d(dhβ[1,:], dhβ[2,:], xlim=lims, ylim=lims,
+               normalize=:pdf, alpha=0.5, legend=false)
+h2=contour!(h2, range(lims..., length=100), range(lims..., length=100),
+            (b1,b2)-&gt;posterior([b1,b2],σ, x, y, τ))
+display(plot(plot!(h,title=&quot;DynamicHMC (NUTS)&quot;), h2,
+             plot(dhβ[:,1:100]', labels=[&quot;β₁&quot; &quot;β₂&quot;], title=&quot;First 100 iterations&quot;, legend=false),
+             plot(dhβ', labels=[&quot;β₁&quot; &quot;β₂&quot;], title=&quot;All iterations&quot;, legend=false),
+             layout=(2,2)))
+</code></pre>
+
+<p><img alt="" src="../figures/ols_9_1.png" /></p>
+<p>See <a href="https://tamaspapp.eu/DynamicHMCExamples.jl/latest/example_linear_regression/">this
+example</a>
+for a more canonical DynamicHMC linear regression implementation.</p>
+<h2 id="turingjl">Turing.jl<a class="headerlink" href="#turingjl" title="Permanent link">&para;</a></h2>
+<p><a href="https://github.com/TuringLang/Turing.jl">Turing.jl</a> is a probabilistic
+programming language (similar to STAN or BUGS), written in Julia.</p>
+<pre><code class="julia">using Turing
+
+@model lreg(x, y, σ, τ) = begin
+  # prior
+  β ~ MvNormal(zeros(size(x,2)), τ)
+  # model
+  y ~ MvNormal(x*β,σ)
+end
+lr = lreg(x,y,σ,τ)
+
+@time cc = Turing.sample(lr, NUTS(0.65), 1000)
+</code></pre>
+
+<pre><code>2.437747 seconds (5.33 M allocations: 311.639 MiB, 5.25% gc time)
+</code></pre>
+<pre><code class="julia">tβ = cc.value[:,[&quot;β[1]&quot;,&quot;β[2]&quot;],1]'
+tβ = hcat(results.inference.chain...)
+h=histogram(tβ', bins=100, labels=[&quot;β₁&quot; &quot;β₂&quot;], fillalpha=0.5, linealpha=0,
+            normalize=:pdf, xlim=lims, legend=false)
+h2=histogram2d(tβ[1,:], tβ[2,:], xlim=lims, ylim=lims,
+               normalize=:pdf, alpha=0.5, legend=false)
+h2=contour!(h2, range(lims..., length=100), range(lims..., length=100),
+            (b1,b2)-&gt;posterior([b1,b2],σ, x, y, τ))
+display(plot(plot!(h,title=&quot;DynamicHMC (NUTS)&quot;), h2,
+             plot(tβ[:,1:100]', labels=[&quot;β₁&quot; &quot;β₂&quot;], title=&quot;First 100 iterations&quot;, legend=false),
+             plot(tβ', labels=[&quot;β₁&quot; &quot;β₂&quot;], title=&quot;All iterations&quot;, legend=false),
+             layout=(2,2)))
+</code></pre>
+
+<p><img alt="" src="../figures/ols_10_1.png" /></p>
 <h2 id="about">About<a class="headerlink" href="#about" title="Permanent link">&para;</a></h2>
 <p>This meant to accompany <a href="https://faculty.arts.ubc.ca/pschrimpf/565/11-bayesianEstimation.pdf">these slides on Bayesian methods in
 IO.</a></p>
