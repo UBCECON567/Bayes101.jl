@@ -378,13 +378,13 @@ end
 </code></pre>
 
 <pre><code>(ϵ, L) = (0.001, 2)
-  2.058724 seconds (16.52 M allocations: 824.979 MiB, 10.34% gc time)
+  2.859568 seconds (18.27 M allocations: 915.913 MiB, 7.04% gc time)
 (ϵ, L) = (0.001, 10)
-  7.335227 seconds (76.23 M allocations: 3.599 GiB, 10.76% gc time)
+  7.433249 seconds (76.23 M allocations: 3.599 GiB, 10.09% gc time)
 (ϵ, L) = (0.1, 2)
-  1.542728 seconds (15.60 M allocations: 779.647 MiB, 10.41% gc time)
+  1.550567 seconds (15.60 M allocations: 779.647 MiB, 9.62% gc time)
 (ϵ, L) = (0.1, 10)
-  7.259481 seconds (76.23 M allocations: 3.599 GiB, 10.37% gc time)
+  7.351889 seconds (76.23 M allocations: 3.599 GiB, 9.59% gc time)
 </code></pre>
 <p><img alt="" src="../figures/ols_8_1.png" /> <img alt="" src="../figures/ols_8_2.png" />
 <img alt="" src="../figures/ols_8_3.png" /> <img alt="" src="../figures/ols_8_4.png" /></p>
@@ -419,14 +419,14 @@ end
 lr = LinearRegressionKnownSigma(y,x,σ,τ)
 ∇logposterior=ADgradient(:Zygote, lr)
 
-@time results=DynamicHMC.mcmc_keep_warmup(Random.GLOBAL_RNG, ∇logposterior, 500;
+@time results=DynamicHMC.mcmc_keep_warmup(Random.GLOBAL_RNG, ∇logposterior, 1000;
                                           warmup_stages=
                                           default_warmup_stages(init_steps=50,
                                                                 middle_steps=100,
                                                                 doubling_stages=2));
 </code></pre>
 
-<pre><code>9.116231 seconds (47.66 M allocations: 1.691 GiB, 5.40% gc time)
+<pre><code>16.932555 seconds (88.10 M allocations: 3.155 GiB, 4.98% gc time)
 </code></pre>
 <pre><code class="julia">dhβ = hcat(results.inference.chain...)
 h=histogram(dhβ', bins=100, labels=[&quot;β₁&quot; &quot;β₂&quot;], fillalpha=0.5, linealpha=0,
@@ -458,10 +458,10 @@ programming language (similar to STAN or BUGS), written in Julia.</p>
 end
 lr = lreg(x,y,σ,τ)
 
-@time cc = Turing.sample(lr, NUTS(0.65), 1000)
+@time cc = Turing.sample(lr, NUTS(0.65), 2000)
 </code></pre>
 
-<pre><code>2.437747 seconds (5.33 M allocations: 311.639 MiB, 5.25% gc time)
+<pre><code>9.670747 seconds (6.20 M allocations: 388.274 MiB, 1.20% gc time)
 </code></pre>
 <pre><code class="julia">tβ = cc.value[:,[&quot;β[1]&quot;,&quot;β[2]&quot;],1]'
 tβ = hcat(results.inference.chain...)
@@ -471,7 +471,7 @@ h2=histogram2d(tβ[1,:], tβ[2,:], xlim=lims, ylim=lims,
                normalize=:pdf, alpha=0.5, legend=false)
 h2=contour!(h2, range(lims..., length=100), range(lims..., length=100),
             (b1,b2)-&gt;posterior([b1,b2],σ, x, y, τ))
-display(plot(plot!(h,title=&quot;DynamicHMC (NUTS)&quot;), h2,
+display(plot(plot!(h,title=&quot;Turing, NUTS&quot;), h2,
              plot(tβ[:,1:100]', labels=[&quot;β₁&quot; &quot;β₂&quot;], title=&quot;First 100 iterations&quot;, legend=false),
              plot(tβ', labels=[&quot;β₁&quot; &quot;β₂&quot;], title=&quot;All iterations&quot;, legend=false),
              layout=(2,2)))
