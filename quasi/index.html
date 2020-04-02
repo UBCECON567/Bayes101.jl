@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        <meta name="author" content="Paul Schrimpf">
+        
+        <link rel="shortcut icon" href="../img/favicon.ico">
+        <title>Quasi-Bayesian - Bayes101.jl</title>
+        <link href="../css/bootstrap.min.css" rel="stylesheet">
+        <link href="../css/font-awesome.min.css" rel="stylesheet">
+        <link href="../css/base.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/rainbow.min.css">
+        <link href="../assets/Documenter.css" rel="stylesheet">
+        <link href="../assets/extra.css" rel="stylesheet">
+
+        <script src="../js/jquery-1.10.2.min.js" defer></script>
+        <script src="../js/bootstrap.min.js" defer></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+        <script>hljs.initHighlightingOnLoad();</script> 
+    </head>
+
+    <body>
+        <div class="navbar fixed-top navbar-expand-lg navbar-dark bg-primary">
+            <div class="container">
+                <a class="navbar-brand" href="..">Bayes101.jl</a>
+                <!-- Expander button -->
+                <button type="button" class="navbar-toggler" data-toggle="collapse" data-target="#navbar-collapse">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+
+                <!-- Expanded navigation -->
+                <div id="navbar-collapse" class="navbar-collapse collapse">
+                        <!-- Main navigation -->
+                        <ul class="nav navbar-nav">
+                            <li class="dropdown active">
+                                <a href="#" class="nav-link dropdown-toggle" data-toggle="dropdown">Notes <b class="caret"></b></a>
+                                <ul class="dropdown-menu">
+                                    
+<li>
+    <a href="../ols/" class="dropdown-item">MCMC sampling methods</a>
+</li>
+                                    
+<li>
+    <a href="./" class="dropdown-item active">Quasi-Bayesian</a>
+</li>
+                                </ul>
+                            </li>
+                            <li class="dropdown">
+                                <a href="#" class="nav-link dropdown-toggle" data-toggle="dropdown">About <b class="caret"></b></a>
+                                <ul class="dropdown-menu">
+                                    
+<li>
+    <a href="../license/" class="dropdown-item">License</a>
+</li>
+                                </ul>
+                            </li>
+                        </ul>
+
+                    <ul class="nav navbar-nav ml-auto">
+                        <li class="nav-item">
+                            <a href="#" class="nav-link" data-toggle="modal" data-target="#mkdocs_search_modal">
+                                <i class="fa fa-search"></i> Search
+                            </a>
+                        </li>
+                            <li class="nav-item">
+                                <a rel="prev" href="../ols/" class="nav-link">
+                                    <i class="fa fa-arrow-left"></i> Previous
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a rel="next" href="../license/" class="nav-link">
+                                    Next <i class="fa fa-arrow-right"></i>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="https://github.com/ubcecon567/Bayes101.jl/edit/master/docs/quasi.md" class="nav-link"><i class="fa fa-github"></i> Edit on GitHub</a>
+                            </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="row">
+                    <div class="col-md-3"><div class="navbar-light navbar-expand-md bs-sidebar hidden-print affix" role="complementary">
+    <div class="navbar-header">
+        <button type="button" class="navbar-toggler collapsed" data-toggle="collapse" data-target="#toc-collapse" title="Table of Contents">
+            <span class="fa fa-angle-down"></span>
+        </button>
+    </div>
+
+    
+    <div id="toc-collapse" class="navbar-collapse collapse card bg-secondary">
+        <ul class="nav flex-column">
+            
+            <li class="nav-item" data-level="1"><a href="#introduction" class="nav-link">Introduction</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            
+            <li class="nav-item" data-level="1"><a href="#random-coefficients-iv-logit" class="nav-link">Random Coefficients IV Logit</a>
+              <ul class="nav flex-column">
+            <li class="nav-item" data-level="2"><a href="#about" class="nav-link">About</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+              </ul>
+            </li>
+        </ul>
+    </div>
+</div></div>
+                    <div class="col-md-9" role="main">
+
+<p><a href="http://creativecommons.org/licenses/by-sa/4.0/"><img alt="" src="https://i.creativecommons.org/l/by-sa/4.0/88x31.png" /></a></p>
+<p>This work is licensed under a <a href="http://creativecommons.org/licenses/by-sa/4.0/">Creative Commons Attribution-ShareAlike
+4.0 International
+License</a></p>
+<pre><code class="julia">using Plots, Distributions
+Plots.pyplot()
+</code></pre>
+
+<pre><code>Plots.PyPlotBackend()
+</code></pre>
+<h1 id="introduction">Introduction<a class="headerlink" href="#introduction" title="Permanent link">&para;</a></h1>
+<p>Traditional bayesian methods require a fully specified statistical
+model, so that a likelihood can be calculated. In particular, this
+requires specifying the distribution of error terms. In IO, and
+economics more broadly, many applied models avoid placing distributional
+assumptions on error terms, and instead use GMM for estimation.</p>
+<p>There are two ways to convert a GMM model into something suitable for
+Bayesian methods. One is to just add distributional assumptions to the
+error terms. (Jiang, Manchanda, and Rossi <a href="#ref-jiang2009">2009</a>)
+applies this approach to a random coefficients demand model.</p>
+<p>A second approach is the Quasi-Bayesian approach of (Chernozhukov and
+Hong <a href="#ref-chernozhukov2003">2003</a>). In this approach, you simply use
+the GMM objective function in place of the likelihood. We will look at
+it in some detail.</p>
+<h1 id="random-coefficients-iv-logit">Random Coefficients IV Logit<a class="headerlink" href="#random-coefficients-iv-logit" title="Permanent link">&para;</a></h1>
+<p>As a working example, we’ll use a random coefficients logit with
+endogeneity. We will use Turing.jl, which is a fairly convenient way to
+both specify the likelihood and simulate the model.</p>
+<pre><code class="julia">using Turing, FastGaussQuadrature
+
+@model rcivlogit(x=missing, z=missing, s=missing;
+                 N=size(x,1), J=size(x,2), ν=gausshermite(12), M=1000,
+                 ::type{R}=Float64) where {R &lt;: Real} =
+begin
+
+  ξ = Matrix{R}(undef, J,N)
+  # Priors
+  β ~ Normal(0, 20.0)
+  σ ~ InverseGamma(2,3)
+  ρ ~ Normal(0, 20.0)
+  Ω ~ InverseWishart(J+3, I)
+  Σx ~ InverseWishart(J+3, I)
+
+  if (ismissing(x))
+    x = Matrix{R}(undef, J,N)
+  end
+  if ismissing(s)
+    s = Matrix{R}(undef, J,N)
+  end
+  if (ismissing(z))
+    z = randn(J,N)    
+  end
+
+  μ = similar(x[1,1]*β, J, length(ν))
+  for i in 1:N
+    ξ[:,i] ~ MvNormal(0, Ω)
+    x[:,i] ~ MvNormal(π*z + ρ*ξ, Σx)
+    for j in 1:J
+      for k in 1:length(ν[1])
+        μ[j,k] = x[j,i]*β .+ x[j,i]*σ*ν[1][k] + ξ[j,i]
+      end      
+    end
+    μ .= exp(μ)
+    for k in 1:length(ν[1])
+      μ[:,k] ./ (1 + sum(μ[:,k]))
+    end
+    s[i] ~ Multinomial(M, μ*ν[2])
+  end
+  return(x=x, z=z, s=s, ξ=ξ, β=β, σ=σ, ρ=ρ, Σx=Σx, Ω=Ω)
+end
+</code></pre>
+
+<pre><code>##rcivlogit#501 (generic function with 4 methods)
+</code></pre>
+<p>TO BE CONTINUED</p>
+<h2 id="about">About<a class="headerlink" href="#about" title="Permanent link">&para;</a></h2>
+<p>This meant to accompany <a href="https://faculty.arts.ubc.ca/pschrimpf/565/11-bayesianEstimation.pdf">these slides on Bayesian methods in
+IO.</a></p>
+<p>This document was created using Weave.jl. The code is available in <a href="https://github.com/UBCECON567/Bayes101.jl">on
+github</a>.</p>
+<div class="references hanging-indent" id="refs">
+<div id="ref-chernozhukov2003">
+<p>Chernozhukov, Victor, and Han Hong. 2003. “An {Mcmc} Approach to
+Classical Estimation.” <em>Journal of Econometrics</em> 115 (2): 293–346.
+<a href="https://doi.org/http://dx.doi.org/10.1016/S0304-4076(03)00100-3">https://doi.org/http://dx.doi.org/10.1016/S0304-4076(03)00100-3</a>.</p>
+</div>
+<div id="ref-jiang2009">
+<p>Jiang, R., P. Manchanda, and P. E. Rossi. 2009. “Bayesian Analysis of
+Random Coefficient Logit Models Using Aggregate Data.” <em>Journal of
+Econometrics</em> 149 (2): 136–48.
+<a href="http://www.sciencedirect.com/science/article/pii/S0304407608002297">http://www.sciencedirect.com/science/article/pii/S0304407608002297</a>.</p>
+</div>
+</div></div>
+            </div>
+        </div>
+
+        <footer class="col-md-12">
+            <hr>
+                <p>Paul Schrimpf</p>
+            <p>Documentation built with <a href="https://www.mkdocs.org/">MkDocs</a>.</p>
+        </footer>
+        <script>
+            var base_url = "..",
+                shortcuts = {"help": 191, "next": 78, "previous": 80, "search": 83};
+        </script>
+        <script src="../js/base.js" defer></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS_HTML" defer></script>
+        <script src="../assets/mathjaxhelper.js" defer></script>
+        <script src="../search/main.js" defer></script>
+
+        <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+                <p>
+                    From here you can search these documents. Enter
+                    your search terms below.
+                </p>
+                <form>
+                    <div class="form-group">
+                        <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+
+    </body>
+</html>

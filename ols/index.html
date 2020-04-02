@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        <meta name="author" content="Paul Schrimpf">
+        
+        <link rel="shortcut icon" href="../img/favicon.ico">
+        <title>MCMC sampling methods - Bayes101.jl</title>
+        <link href="../css/bootstrap.min.css" rel="stylesheet">
+        <link href="../css/font-awesome.min.css" rel="stylesheet">
+        <link href="../css/base.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/rainbow.min.css">
+        <link href="../assets/Documenter.css" rel="stylesheet">
+        <link href="../assets/extra.css" rel="stylesheet">
+
+        <script src="../js/jquery-1.10.2.min.js" defer></script>
+        <script src="../js/bootstrap.min.js" defer></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+        <script>hljs.initHighlightingOnLoad();</script> 
+    </head>
+
+    <body>
+        <div class="navbar fixed-top navbar-expand-lg navbar-dark bg-primary">
+            <div class="container">
+                <a class="navbar-brand" href="..">Bayes101.jl</a>
+                <!-- Expander button -->
+                <button type="button" class="navbar-toggler" data-toggle="collapse" data-target="#navbar-collapse">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+
+                <!-- Expanded navigation -->
+                <div id="navbar-collapse" class="navbar-collapse collapse">
+                        <!-- Main navigation -->
+                        <ul class="nav navbar-nav">
+                            <li class="dropdown active">
+                                <a href="#" class="nav-link dropdown-toggle" data-toggle="dropdown">Notes <b class="caret"></b></a>
+                                <ul class="dropdown-menu">
+                                    
+<li>
+    <a href="./" class="dropdown-item active">MCMC sampling methods</a>
+</li>
+                                    
+<li>
+    <a href="../quasi/" class="dropdown-item">Quasi-Bayesian</a>
+</li>
+                                </ul>
+                            </li>
+                            <li class="dropdown">
+                                <a href="#" class="nav-link dropdown-toggle" data-toggle="dropdown">About <b class="caret"></b></a>
+                                <ul class="dropdown-menu">
+                                    
+<li>
+    <a href="../license/" class="dropdown-item">License</a>
+</li>
+                                </ul>
+                            </li>
+                        </ul>
+
+                    <ul class="nav navbar-nav ml-auto">
+                        <li class="nav-item">
+                            <a href="#" class="nav-link" data-toggle="modal" data-target="#mkdocs_search_modal">
+                                <i class="fa fa-search"></i> Search
+                            </a>
+                        </li>
+                            <li class="nav-item">
+                                <a rel="prev" class="nav-link disabled">
+                                    <i class="fa fa-arrow-left"></i> Previous
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a rel="next" href="../quasi/" class="nav-link">
+                                    Next <i class="fa fa-arrow-right"></i>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="https://github.com/ubcecon567/Bayes101.jl/edit/master/docs/ols.md" class="nav-link"><i class="fa fa-github"></i> Edit on GitHub</a>
+                            </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="row">
+                    <div class="col-md-3"><div class="navbar-light navbar-expand-md bs-sidebar hidden-print affix" role="complementary">
+    <div class="navbar-header">
+        <button type="button" class="navbar-toggler collapsed" data-toggle="collapse" data-target="#toc-collapse" title="Table of Contents">
+            <span class="fa fa-angle-down"></span>
+        </button>
+    </div>
+
+    
+    <div id="toc-collapse" class="navbar-collapse collapse card bg-secondary">
+        <ul class="nav flex-column">
+            
+            <li class="nav-item" data-level="1"><a href="#linear-regression" class="nav-link">Linear Regression</a>
+              <ul class="nav flex-column">
+            <li class="nav-item" data-level="2"><a href="#simulation" class="nav-link">Simulation</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-level="2"><a href="#computing-posteriors" class="nav-link">Computing Posteriors</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-level="2"><a href="#exact-posterior" class="nav-link">Exact Posterior</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-level="2"><a href="#metropolis-hastings" class="nav-link">Metropolis Hastings</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-level="2"><a href="#gibbs-sampling" class="nav-link">Gibbs Sampling</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-level="2"><a href="#hamiltonian-monte-carlo" class="nav-link">Hamiltonian Monte Carlo</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-level="2"><a href="#about" class="nav-link">About</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+              </ul>
+            </li>
+        </ul>
+    </div>
+</div></div>
+                    <div class="col-md-9" role="main">
+
+<p><a href="http://creativecommons.org/licenses/by-sa/4.0/"><img alt="" src="https://i.creativecommons.org/l/by-sa/4.0/88x31.png" /></a></p>
+<p>This work is licensed under a <a href="http://creativecommons.org/licenses/by-sa/4.0/">Creative Commons Attribution-ShareAlike
+4.0 International
+License</a></p>
+<pre><code class="julia">using Plots, Distributions, StatsPlots, LinearAlgebra
+Plots.pyplot()
+</code></pre>
+
+<pre><code>Plots.PyPlotBackend()
+</code></pre>
+<h1 id="linear-regression">Linear Regression<a class="headerlink" href="#linear-regression" title="Permanent link">&para;</a></h1>
+<p>Let’s simulate a simple linear regression, and then sample from the
+posterior using a few methods.</p>
+<p>The model is <script type="math/tex; mode=display">
+y_i = x_i \beta + \epsilon_i
+</script> with $\epsilon_i \sim N(0, \sigma^2)$</p>
+<h2 id="simulation">Simulation<a class="headerlink" href="#simulation" title="Permanent link">&para;</a></h2>
+<pre><code class="julia">function simulateOLS(;N::Integer = Int(1e4), β = ones(4), σ = 1)
+  x = randn(N,length(β))
+  y = x*β + randn(N)*σ
+  return(x, y)
+end
+x, y = simulateOLS(N=Int(1e2), β=ones(2), σ=1)
+</code></pre>
+
+<pre><code>([0.24028672132092774 0.1610425415770581; 0.8063626454312611 -1.09488538598
+77512; … ; -0.723156846407223 0.028510765138135233; -2.2069599708500887 1.2
+90874681127001], [0.9241041896457489, -0.7448390909274403, 1.63168824478042
+97, -1.3561846102324333, -1.2338603318120267, -1.7819278865795871, -0.83995
+89022316865, 1.127621561108231, -0.41848210142260334, -1.239660418302705  …
+  -0.16992286107408822, 0.8346837701491645, -0.11998103892739115, 1.8443011
+72361067, -1.7372207959226003, 5.183723095097619, -1.000290388265417, -1.25
+1402129826904, -1.496911050525861, -2.6735755810429866])
+</code></pre>
+<h2 id="computing-posteriors">Computing Posteriors<a class="headerlink" href="#computing-posteriors" title="Permanent link">&para;</a></h2>
+<p>To calculate the posterior distribution of $\beta$ given the $x$ and
+$y$, we use a conditional version of Bayes’ rule.</p>
+<p>
+<script type="math/tex; mode=display">
+    p(\beta|x, y, \sigma) = \frac{p(y|x, \beta, \sigma) p(\beta|\sigma, x) } {p(y |x,\sigma)}
+</script>
+</p>
+<p>To keep the calculations as simple as possible, we will treat $\sigma$
+as known for now. Since a regression model is agnostic about the
+distribution of $x$, it is standard to assume that <script type="math/tex; mode=display">
+p(\beta|\sigma, x) = p(\beta|\sigma)
+</script> In other words, the distribution of $\beta$ is independent of $x$.</p>
+<p>With normal errors, the log likelihood, i.e. the log conditional density
+of $y$ given the parameters , or,</p>
+<p>
+<script type="math/tex; mode=display">
+    \log(p(y|x, \beta,\sigma)) 
+</script>
+</p>
+<p>is:</p>
+<pre><code class="julia">function loglike(β, σ, x, y)
+  return(-length(y)/2*log(2π) - 1/2*sum(((y .- x*β)./σ).^2))
+end
+</code></pre>
+
+<pre><code>loglike (generic function with 1 method)
+</code></pre>
+<h2 id="exact-posterior">Exact Posterior<a class="headerlink" href="#exact-posterior" title="Permanent link">&para;</a></h2>
+<p>If we assume that the prior for $\beta$ is normal, <script type="math/tex; mode=display">
+\beta|\sigma \sim N(0, \tau^2 I_k)
+</script> then the posterior can be computed exactly. It is: <script type="math/tex; mode=display">
+    \beta|x, y, \sigma \sim N\left( (x'x/\sigma^2 + I/\tau^2)^{-1} x'y/\sigma^2,  (x'x/\sigma^2 + I/\tau^2)^{-1})
+</script>
+</p>
+<pre><code class="julia">function posterior(β, σ, x, y, τ)
+  Σ = inv(x'*x/σ^2 + I/τ^2)
+  μ = Σ*x'*y/σ^2
+  return(pdf(MvNormal(μ, Σ), β))
+end
+</code></pre>
+
+<pre><code>posterior (generic function with 1 method)
+</code></pre>
+<h2 id="metropolis-hastings">Metropolis Hastings<a class="headerlink" href="#metropolis-hastings" title="Permanent link">&para;</a></h2>
+<p>If we didn’t know the exact posterior, we could sample from it in a
+number of ways. Metropolis Hastings is a simple general purpose method.</p>
+<pre><code class="julia">function mhstep(θ, likelihood::Function, prior::Function,
+                proposal::Function)
+  pold = likelihood(θ)*prior(θ)
+  θnew = rand(proposal(θ))
+  pnew = likelihood(θnew)*prior(θnew)
+  α = pnew*pdf(proposal(θnew), θ)/(pold *pdf(proposal(θ), θnew))
+  u = rand()
+  return( (u &lt; α) ? θnew : θ)
+end
+
+function mhchain(θ0, iterations, likelihood, prior, proposal)
+
+  θ = similar(θ0, length(θ0), iterations)
+  θ[:,1] .= θ0
+  for i in 2:iterations
+    θ[:,i] .= mhstep(θ[:,i-1], likelihood, prior, proposal)
+  end
+  return(θ)
+end
+</code></pre>
+
+<pre><code>mhchain (generic function with 1 method)
+</code></pre>
+<p>When using Metropolis-Hastings, the proposal density plays a key role.
+The close the proposal is to the posterior, the faster the chain
+converges.</p>
+<p>One common choice of proposal distribution is the random walk— draw
+candidate parameters from $N(\theta, s)$. Let’s try it.</p>
+<pre><code class="julia">τ = 10.0
+k = size(x,2)
+σ = 1.0
+for s in [0.01, 0.1, 1.0, 10.0]
+  rwβ = mhchain(zeros(k), Int(1e5), 
+                β-&gt;exp(loglike(β, σ, x, y)),
+                β-&gt;pdf(MvNormal(zeros(k), I*τ), β),
+                β-&gt;MvNormal(β, s*I))
+
+  lims=(0.5, 1.5)
+  h=histogram(rwβ', bins=100, labels=[&quot;β₁&quot; &quot;β₂&quot;], fillalpha=0.5, linealpha=0, normalize=:pdf, xlim=lims, legend=false)
+  h2=histogram2d(rwβ[1,:], rwβ[2,:], xlim=lims, ylim=lims, normalize=:pdf, alpha=0.5, legend=false)
+  h2=contour!(h2, range(lims..., length=100), range(lims..., length=100), (b1,b2)-&gt;posterior([b1,b2],σ, x, y, τ))
+  display(plot(plot!(h,title=&quot;Random Walk with s=$s&quot;), h2,
+             plot(rwβ[:,1:100]', labels=[&quot;β₁&quot; &quot;β₂&quot;], title=&quot;First 100 iterations&quot;, legend=false),
+             plot(rwβ', labels=[&quot;β₁&quot; &quot;β₂&quot;], title=&quot;All iterations&quot;, legend=false),
+             layout=(2,2)))
+end
+</code></pre>
+
+<p><img alt="" src="../figures/ols_6_1.png" /> <img alt="" src="../figures/ols_6_2.png" />
+<img alt="" src="../figures/ols_6_3.png" /> <img alt="" src="../figures/ols_6_4.png" /></p>
+<p>Another possible choice of proposal density is an independent — draw
+candidate parameters from some fixed distribution.</p>
+<h2 id="gibbs-sampling">Gibbs Sampling<a class="headerlink" href="#gibbs-sampling" title="Permanent link">&para;</a></h2>
+<p>Gibbs sampling refers to when we sample part of our parameters
+conditional on others, then vice versa, and repeat. Generally, the more
+parameters than can be sampled at once, the better the chain will work.
+As a simple illustration, we can sample each of our regression
+coefficients conditional on the others.</p>
+<pre><code class="julia">function gibbschain(θ0, iterations, x, y, σ, τ)  
+  θ = similar(θ0, length(θ0), iterations)
+  θ[:,1] .= θ0
+  for i in 2:iterations
+    β = θ[:,i-1]
+    @views for j in 1:length(β)
+      e = y .- x[:,1:end .!= j]*β[1:end .!= j] 
+      v = 1/(dot(x[:,j], x[:,j])/σ^2 + 1/τ^2)
+      m = v * (dot(x[:,j],e)/σ^2)
+      β[j] = rand(Normal(m,sqrt(v)))
+    end
+    θ[:,i] = β    
+  end
+  return(θ)
+end
+
+gβ = gibbschain(zeros(2), Int(1e5), x, y, σ, τ)
+
+lims=(0.5, 1.5)
+
+h=histogram(gβ', bins=100, labels=[&quot;β₁&quot; &quot;β₂&quot;], fillalpha=0.5, linealpha=0, normalize=:pdf, xlim=lims, legend=false)
+h2=histogram2d(gβ[1,:], gβ[2,:], xlim=lims, ylim=lims, normalize=:pdf, alpha=0.5, legend=false)
+h2=contour!(h2, range(lims..., length=100), range(lims..., length=100), (b1,b2)-&gt;posterior([b1,b2],σ, x, y, τ))
+display(plot(plot!(h,title=&quot;Gibbs Sampling&quot;), h2,
+           plot(gβ[:,1:100]', labels=[&quot;β₁&quot; &quot;β₂&quot;], title=&quot;First 100 iterations&quot;, legend=false),
+           plot(gβ', labels=[&quot;β₁&quot; &quot;β₂&quot;], title=&quot;All iterations&quot;, legend=false),
+           layout=(2,2)))
+</code></pre>
+
+<p><img alt="" src="../figures/ols_7_1.png" /></p>
+<p>Gibbs sampling is a particularly good idea when the parameters can be
+divided into groups such that posterior of parameters in each group
+conditional on the others has a known form. If some parameters do not
+have known posterior, then another sampling strategy within the Gibbs
+sampler can be used (like metropolis-hastings).</p>
+<p>With judicious choice of blocks and conjugate priors, Gibbs sampling can
+be applied to very complex models. OpenBUGS, WinBUGS and JAGS are
+(non-Julia) software packages designed around Gibbs sampling.
+<a href="https://mambajl.readthedocs.io/en/latest/#">Mamba.jl</a> is a Julia
+package that could be used for Gibbs sampling (as well as other sampling
+methods).</p>
+<h2 id="hamiltonian-monte-carlo">Hamiltonian Monte Carlo<a class="headerlink" href="#hamiltonian-monte-carlo" title="Permanent link">&para;</a></h2>
+<p>Recent efforts in Bayesian computation have shifted away from Gibbs
+sampling of blocks with closed form posteriors towards more general
+purpose methods. Metropolis-Hastings is a general purpose algorithm in
+that all you need to use it is to be able to compute the likelihood (up
+to a constant of proportionality) and the prior. Unfortunately,
+Metropolis-Hastings requires a good proposal distribution to work well,
+and it is hard to find a good proposal distribution in many situations.</p>
+<p>Hamiltonian Monte Carlo uses information about the gradient of the
+posterior to generate a good proposal distribution. The physical analogy
+here is that the log posterior acts like a gravitational field, and we
+generate samples by creating random trajectories through that field.
+With the right choice of trajectories (i.e. not too fast &amp; not too
+slow), they will tend to concentrate in areas of high posterior
+probability, while also exploring the space of parameters well.</p>
+<pre><code class="julia">using Zygote, ForwardDiff
+function hmcstep(θ, logdens, ϵ=0.1, L=5;
+                 ∇logdens=θ-&gt;Zygote.gradient(logdens, θ)[1],
+                 M = I, iM=inv(M))
+  U(x) = -logdens(x)
+  dU(x) = -∇logdens(x)
+  K(m) = (m'*iM*m/2)[1]
+  dK(m) = m'*iM
+  m = rand(MvNormal(zeros(length(θ)), M),1)
+  θnew = copy(θ)
+  mnew = copy(m)
+  for s in 1:L
+    mnew .+= -dU(θnew)[:]*ϵ/2
+    θnew .+= dK(mnew)[:]*ϵ
+  end
+  α  = exp(-U(θnew)+U(θ)-K(mnew)+K(m))
+  u = rand()
+  return(u &lt; α ? θnew : θ)
+end
+
+function hmcchain(θ0, iterations, logdens, ∇logdens=θ-&gt;Zygotes.gradient(logdens, θ)[1]
+                  ; ϵ=0.1, L=5, M=I)
+  θ = similar(θ0, length(θ0), iterations)
+  θ[:,1] .= θ0
+  for i in 2:iterations
+    θ[:,i] .= hmcstep(θ[:,i-1], logdens, ϵ, L, M=M)
+  end
+  return(θ)
+end
+
+
+logp = β-&gt;(loglike(β, σ, x, y) + logpdf(MvNormal(zeros(k), I*τ), β))
+∇logp(β) = ForwardDiff.gradient(logp, β)
+for ϵ in [1e-3, 0.1]
+  for L in [2, 10]
+    @show ϵ, L
+    @time hβ = hmcchain(zeros(k), Int(1e4),logp, ϵ=ϵ, L=L)
+    lims=(0.5, 1.5)
+    h=histogram(hβ', bins=100, labels=[&quot;β₁&quot; &quot;β₂&quot;], fillalpha=0.5, linealpha=0,
+                normalize=:pdf, xlim=lims, legend=false)
+    h2=histogram2d(hβ[1,:], hβ[2,:], xlim=lims, ylim=lims, normalize=:pdf, alpha=0.5, legend=false)
+    h2=contour!(h2, range(lims..., length=100), range(lims..., length=100), (b1,b2)-&gt;posterior([b1,b2],σ, x, y, τ))
+    display(plot(plot!(h,title=&quot;HMC with ϵ=$ϵ, L=$L&quot;), h2,
+               plot(hβ[:,1:100]', labels=[&quot;β₁&quot; &quot;β₂&quot;], title=&quot;First 100 iterations&quot;, legend=false),
+               plot(hβ', labels=[&quot;β₁&quot; &quot;β₂&quot;], title=&quot;All iterations&quot;, legend=false),
+               layout=(2,2)))
+  end
+end
+</code></pre>
+
+<pre><code>(ϵ, L) = (0.001, 2)
+  1.942575 seconds (16.88 M allocations: 832.437 MiB, 9.73% gc time)
+(ϵ, L) = (0.001, 10)
+  7.078797 seconds (78.05 M allocations: 3.641 GiB, 9.95% gc time)
+(ϵ, L) = (0.1, 2)
+  1.491165 seconds (15.98 M allocations: 788.496 MiB, 9.56% gc time)
+(ϵ, L) = (0.1, 10)
+  7.070048 seconds (78.05 M allocations: 3.641 GiB, 9.94% gc time)
+</code></pre>
+<p><img alt="" src="../figures/ols_8_1.png" /> <img alt="" src="../figures/ols_8_2.png" />
+<img alt="" src="../figures/ols_8_3.png" /> <img alt="" src="../figures/ols_8_4.png" /></p>
+<p>The step size, $\epsilon$, and the number of steps, $L$, affect how well
+the chain performs. If $\epsilon$ or $L$ is too large, then many
+proposals will get rejected. If $\epsilon L$ is too small, then the
+draws will be very close together, and it will take more iterations of
+the chain to explore the space.</p>
+<p>The No-U-Turn-Sample (NUTS) ((Hoffman and Gelman
+<a href="#ref-hoffman2014">2014</a>)) automatically chooses $L$ and $\epsilon$.
+<a href="https://github.com/tpapp/DynamicHMC.jl">DynamicHMC.jl</a> is a Julia
+implementation. <a href="https://mc-stan.org/">Stan</a> is (non-Julia, but callable
+from Julia) software for Bayesian modelling that largely uses NUTS for
+sampling. <a href="https://github.com/TuringLang/Turing.jl">Turing.jl</a> is a
+probabilistic programming language (similar to STAN or BUGS), built on
+top of Julia.</p>
+<h2 id="about">About<a class="headerlink" href="#about" title="Permanent link">&para;</a></h2>
+<p>This meant to accompany <a href="https://faculty.arts.ubc.ca/pschrimpf/565/11-bayesianEstimation.pdf">these slides on Bayesian methods in
+IO.</a></p>
+<p>This document was created using Weave.jl ((Pastell <a href="#ref-weave">2017</a>)).
+The code is available in <a href="https://github.com/UBCECON567/Bayes101.jl">on
+github</a>.</p>
+<div class="references hanging-indent" id="refs">
+<div id="ref-hoffman2014">
+<p>Hoffman, Matthew D, and Andrew Gelman. 2014. “The No-U-Turn Sampler:
+Adaptively Setting Path Lengths in Hamiltonian Monte Carlo.” <em>Journal of
+Machine Learning Research</em> 15 (1): 1593–1623.
+<a href="http://www.jmlr.org/papers/volume15/hoffman14a/hoffman14a.pdf">http://www.jmlr.org/papers/volume15/hoffman14a/hoffman14a.pdf</a>.</p>
+</div>
+<div id="ref-weave">
+<p>Pastell, Matti. 2017. “Weave.jl: Scientific Reports Using Julia.” <em>The
+Journal of Open Source Software</em>.
+<a href="https://doi.org/http://dx.doi.org/10.21105/joss.00204">https://doi.org/http://dx.doi.org/10.21105/joss.00204</a>.</p>
+</div>
+</div></div>
+            </div>
+        </div>
+
+        <footer class="col-md-12">
+            <hr>
+                <p>Paul Schrimpf</p>
+            <p>Documentation built with <a href="https://www.mkdocs.org/">MkDocs</a>.</p>
+        </footer>
+        <script>
+            var base_url = "..",
+                shortcuts = {"help": 191, "next": 78, "previous": 80, "search": 83};
+        </script>
+        <script src="../js/base.js" defer></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS_HTML" defer></script>
+        <script src="../assets/mathjaxhelper.js" defer></script>
+        <script src="../search/main.js" defer></script>
+
+        <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+                <p>
+                    From here you can search these documents. Enter
+                    your search terms below.
+                </p>
+                <form>
+                    <div class="form-group">
+                        <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+
+    </body>
+</html>
