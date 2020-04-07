@@ -103,6 +103,15 @@
             
             <li class="nav-item" data-level="1"><a href="#random-coefficients-iv-logit" class="nav-link">Random Coefficients IV Logit</a>
               <ul class="nav flex-column">
+            <li class="nav-item" data-level="2"><a href="#fully-specified-likelihood" class="nav-link">Fully specified likelihood</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+              </ul>
+            </li>
+            
+            <li class="nav-item" data-level="1"><a href="#quasi-bayesian" class="nav-link">Quasi-Bayesian</a>
+              <ul class="nav flex-column">
             <li class="nav-item" data-level="2"><a href="#about" class="nav-link">About</a>
               <ul class="nav flex-column">
               </ul>
@@ -139,56 +148,208 @@ Hong <a href="#ref-chernozhukov2003">2003</a>). In this approach, you simply use
 the GMM objective function in place of the likelihood. We will look at
 it in some detail.</p>
 <h1 id="random-coefficients-iv-logit">Random Coefficients IV Logit<a class="headerlink" href="#random-coefficients-iv-logit" title="Permanent link">&para;</a></h1>
-<p>As a working example, we’ll use a random coefficients logit with
-endogeneity. We will use Turing.jl, which is a fairly convenient way to
-both specify the likelihood and simulate the model.</p>
-<pre><code class="julia">using Turing, FastGaussQuadrature
+<p>As a working example, we’ll use a random coefficients multinomial logit
+with endogeneity. To keep things simple for illustrustration, we’ll
+assume that there’s a single endogenous variable, $x \in \mathbb{R}^J$,
+and market shares are given by <script type="math/tex; mode=display">
+s^*(\beta, \sigma, \xi; x) = \int \frac{e^{x_j\beta + \xi_j + x_j\sigma \nu}} 
+{1 + \sum_{\ell} e^{x_\ell\beta + \xi_\ell + x_\ell\sigma \nu}} d\Phi(\nu)/\sigma
+</script>
+</p>
+<p>The moment condition will be <script type="math/tex; mode=display">
+0 = \Er[\xi | z ] 
+</script>
+</p>
+<h2 id="fully-specified-likelihood">Fully specified likelihood<a class="headerlink" href="#fully-specified-likelihood" title="Permanent link">&para;</a></h2>
+<p>One way to estimate the model is to fully specify a parametric
+likleihood. In the simulated data, we know the correct likelihood, so
+the results we get will be about as good as we can possibly hope to get.
+Compared to GMM, the full likelihood approach here assumes that
+(conditional on the instruments, $z$), the market demand shocks are
+normally distributed,</p>
+<p>
+<script type="math/tex; mode=display">
+ \xi \sim N(0, \Omega)
+</script>
+</p>
+<p>The endogenous variable, $x$, has a normal first stage,</p>
+<p>
+<script type="math/tex; mode=display">
+ x = z \Pi + \xi \Rho + u \;,\; u \sim N(0, \Sigma_x)
+</script>
+</p>
+<p>and to keep the number of parameters small, we’ll impose $\Pi=\pi I_J$
+and $\Rho=\rho I_J$.</p>
+<p>Finally, we’ll assume the observed market shares $s_j$ come from $M$
+draws from a Multinomial distribtion</p>
+<p>
+<script type="math/tex; mode=display">
+M round(s) ~ Multinomial(M, s^*(\beta,\sigma,\xi)) 
+</script>
+</p>
+<p>where $s^*()$ is the share function implied by the random coefficients
+model. This approach removes the need to solve for $\xi$ as a function
+of $s$ and the other parameters. However, it has the downsides of
+needing to know $M$, and needing to sample $\xi$ along with the
+parameters to generate the posterior.</p>
+<p>We implement the above model in Turing.jl. This gives a convenient way
+to both simulate the model and compute the posterior. However, it has
+the downside of putting an extra layer of abstraction between us and the
+core computations. This ends up costing us a bit of computation time,
+and arguably making the posterior calculation harder to debug and
+extend.</p>
+<pre><code class="julia">using Turing, FastGaussQuadrature, LinearAlgebra, NNlib, JLD2
 
-@model rcivlogit(x=missing, z=missing, s=missing;
-                 N=size(x,1), J=size(x,2), ν=gausshermite(12), M=1000,
-                 ::type{R}=Float64) where {R &lt;: Real} =
-begin
-
-  ξ = Matrix{R}(undef, J,N)
-  # Priors
-  β ~ Normal(0, 20.0)
-  σ ~ InverseGamma(2,3)
-  ρ ~ Normal(0, 20.0)
-  Ω ~ InverseWishart(J+3, I)
-  Σx ~ InverseWishart(J+3, I)
-
-  if (ismissing(x))
-    x = Matrix{R}(undef, J,N)
-  end
-  if ismissing(s)
-    s = Matrix{R}(undef, J,N)
-  end
-  if (ismissing(z))
-    z = randn(J,N)    
-  end
-
-  μ = similar(x[1,1]*β, J, length(ν))
-  for i in 1:N
-    ξ[:,i] ~ MvNormal(0, Ω)
-    x[:,i] ~ MvNormal(π*z + ρ*ξ, Σx)
-    for j in 1:J
-      for k in 1:length(ν[1])
-        μ[j,k] = x[j,i]*β .+ x[j,i]*σ*ν[1][k] + ξ[j,i]
-      end      
+@model rcivlogit(x=missing, z=missing, s=missing, 
+                 M=100, ν=gausshermite(12),
+                 param=missing, N=10,J=1, ::Type{T}=Float64) where {T &lt;: Real} =
+  begin
+    if x === missing
+      @assert s===missing &amp;&amp; z===missing
+      x = Matrix{T}(undef, J, N)
+      s = Matrix{Int64}(undef,J+1,N)
+      z = randn(J,N)
     end
-    μ .= exp(μ)
-    for k in 1:length(ν[1])
-      μ[:,k] ./ (1 + sum(μ[:,k]))
+    J, N = size(x)
+    ξ = Matrix{T}(undef, J, N)
+    if !ismissing(param)
+      β = pm.β
+      σ = pm.σ
+      Σx = pm.Σx
+      π = pm.π
+      ρ = pm.ρ
+      Ω = pm.Ω
+    else
+      # Priors
+      β ~ Normal(0, 20.0)
+      σ ~ truncated(Normal(1.0, 10.0),0, Inf)
+      ρ ~ Normal(0, 20.0)
+      Σx ~ Wishart(J+2, diagm(ones(J))*1/(2*0.001))
+      Ω ~ Wishart(J+2, diagm(ones(J))*1/(2*0.001))
+      π ~ Normal(0.0, 20.0)
     end
-    s[i] ~ Multinomial(M, μ*ν[2])
+    # The likelihood
+    ξ .~ MvNormal(zeros(J), Symmetric(Ω))
+    μ = zeros(typeof(x[1][1]*β),  J + 1 , length(ν[1]))
+    for i in 1:N
+      x[:,i] ~ MvNormal(π*z[:,i] + ρ*ξ[:,i], Symmetric(Σx))
+      μ[1:J,:] .= x[:,i]*β + ξ[:,i] .+ x[:,i]*σ*sqrt(2)*ν[1]'
+      μ = softmax(μ, dims=1)
+      p = (μ*ν[2])/sqrt(Base.π)
+      s[:,i] ~ Multinomial(M,p)
+    end
+    return(x=x, z=z, s=s, ξ=ξ)
   end
-  return(x=x, z=z, s=s, ξ=ξ, β=β, σ=σ, ρ=ρ, Σx=Σx, Ω=Ω)
+
+# some parameters for simulating data
+J = 2
+pm = (β=-1.0, σ=0.1, ρ=0.5, Σx=diagm(ones(J)), Ω=I+0.5*ones(J,J), π=1.0)
+N = 20
+M = 100
+# simulate the data
+data=rcivlogit(missing, missing ,missing, M, gausshermite(3), pm, N, J)()
+</code></pre>
+
+<pre><code>(x = [1.5606236206850213 1.5219519158714623 … -1.0286360497735627 0.0108184
+89156514982; -2.453567800278451 0.5074554461839629 … 0.5625250614341037 0.4
+003686868010303], z = [1.3985257483704419 0.29713928629288733 … -1.48477596
+13888762 -0.3214252085197562; -1.6739253080692698 0.6973508925584603 … 1.38
+24130832342796 0.9358136182938399], s = [1 23 … 50 39; 91 29 … 2 41; 8 48 …
+ 48 20], ξ = [0.8524649217560317 0.8993545466798069 … -0.572432434708106 1.
+0527960731587946; 0.42256442675637257 0.025142021553804295 … -2.63427388968
+96534 1.4402460980774723])
+</code></pre>
+<p>Some remarks on the code</p>
+<ul>
+<li>
+<p>When a Turing model is passed missing arguments, it sample them from
+    the specified distributions. When the arguments are not missing,
+    they’re treated as data and held fixed while calculating the
+    posterior.</p>
+</li>
+<li>
+<p>We use Gauss Hermite quadrature to integrate out the random
+    coefficient. 3 integration points is not going to calculate the
+    integral very accurately, but, since we use the same integration
+    approach during estimation, the inaccuracy won’t matter.</p>
+</li>
+</ul>
+<p>The Wishart prior distributions for the covariance matrices are not
+entirely standard. The <strong>inverse</strong> Wishart distribution is the conjugate
+prior for the covariance matrix of a Normal distribution, and is a
+common choice. However, when using HMC for sampling, conjugate priors do
+not matter. The modern view is that the inverse Wishart puts too much
+weight on covariances with high correlation, and other priors. The
+Wishart prior follows the advice of (Chung et al.
+<a href="#ref-chung2015">2015</a>), and helps to avoid regions with degenerate
+covariance matrices (which were causing numeric problems during the
+tuning stages of NUTS with other priors, like the LKJ distribution).</p>
+<h3 id="results">Results<a class="headerlink" href="#results" title="Permanent link">&para;</a></h3>
+<p>We can simulate the posterior with the following code. It takes some
+time to run.</p>
+<pre><code class="julia">model = rcivlogit(data.x, data.z, data.s, M, gausshermite(3), missing, N,J)
+chain = Turing.sample(model, NUTS(0.65), 1000, progress=true, verbose=true)
+JLD2.@save &quot;turing.jld2&quot; chain model data
+</code></pre>
+
+<p>Let’s look at the posteriors. The chain also contains posteriors for all
+$JN$ values of $\xi$, which are not going to be displayed.</p>
+<pre><code class="julia">JLD2.@load &quot;turing.jld2&quot; chain model data
+</code></pre>
+
+<pre><code>Error: SystemError: opening file "turing.jld2": No such file or directory
+</code></pre>
+<pre><code class="julia">display(describe(chain[[keys(pm)...]]))
+</code></pre>
+
+<pre><code>Error: UndefVarError: chain not defined
+</code></pre>
+<pre><code class="julia">for k in keys(pm)
+  display(plot(chain[k]))
 end
 </code></pre>
 
-<pre><code>##rcivlogit#1145 (generic function with 4 methods)
+<pre><code>Error: UndefVarError: chain not defined
 </code></pre>
-<p>TO BE CONTINUED</p>
+<h3 id="dynamichmc-implementation">DynamicHMC Implementation<a class="headerlink" href="#dynamichmc-implementation" title="Permanent link">&para;</a></h3>
+<h1 id="quasi-bayesian">Quasi-Bayesian<a class="headerlink" href="#quasi-bayesian" title="Permanent link">&para;</a></h1>
+<p>Consider the following GMM setup. We have a data-depenendent function
+$g_i(\theta)$ such that $\Er[g_i(\theta_0)] = 0$ . Let the usual GMM
+estimator be</p>
+<p>
+<script type="math/tex; mode=display">
+\hat{\theta}_n = \argmin_\theta n(\frac{1}{n} g_i(\theta) )' W (\frac{1}{n} g_i(\theta) )
+</script>
+</p>
+<p>Assume the usual regularity conditions so that</p>
+<p>
+<script type="math/tex; mode=display">
+    \sqrt{n}(\hat{\theta}_n - \theta_0) \to N\left(0, (D'WD)^{-1}(D'W\Omega W D)  (D'WD)^{-1} \right)
+</script>
+</p>
+<p>where $D = D_\theta \Er[g_i(\theta_0)]$ and
+$\frac{1}{\sqrt{n}} \sum  g_i(\theta_0) \to N(0, \Omega)$.</p>
+<p>Quasi-Bayesian approaches are based on sampling from a quasi-posterior
+that also converges to
+$N\left(0, (D&rsquo;WD)^{-1}(D&rsquo;W\Omega W D)  (D&rsquo;WD)^{-1} \right)$ as
+$n\to \infty$.</p>
+<p>Let $\Sigma = (D&rsquo;WD)^{-1}(D&rsquo;W\Omega W D) (D&rsquo;WD)^{-1} \right)$. Note that
+the log density of the asymptotic distribution is</p>
+<p>
+<script type="math/tex; mode=display">
+  p_\infy(\theta) \propto -\frac{n}{2}(\theta - \theta_0)' \Sigma^{-1} (\theta - \theta_0)
+</script>
+</p>
+<p>Compare that to minus the GMM objective function</p>
+<p>
+<script type="math/tex; mode=display">
+p_n(\theta) \propto -n ...
+</script>
+</p>
+<p>See <a href="https://ocw.mit.edu/courses/economics/14-385-nonlinear-econometric-analysis-fall-2007/lecture-notes/lecture10_11.pdf">these
+notes</a>
+for more information, or (Chernozhukov and Hong
+<a href="#ref-chernozhukov2003">2003</a>) for complete details.</p>
 <h2 id="about">About<a class="headerlink" href="#about" title="Permanent link">&para;</a></h2>
 <p>This meant to accompany <a href="https://faculty.arts.ubc.ca/pschrimpf/565/11-bayesianEstimation.pdf">these slides on Bayesian methods in
 IO.</a></p>
@@ -199,6 +360,13 @@ github</a>.</p>
 <p>Chernozhukov, Victor, and Han Hong. 2003. “An {Mcmc} Approach to
 Classical Estimation.” <em>Journal of Econometrics</em> 115 (2): 293–346.
 <a href="https://doi.org/http://dx.doi.org/10.1016/S0304-4076(03)00100-3">https://doi.org/http://dx.doi.org/10.1016/S0304-4076(03)00100-3</a>.</p>
+</div>
+<div id="ref-chung2015">
+<p>Chung, Yeojin, Andrew Gelman, Sophia Rabe-Hesketh, Jingchen Liu, and
+Vincent Dorie. 2015. “Weakly Informative Prior for Point Estimation of
+Covariance Matrices in Hierarchical Models.” <em>Journal of Educational and
+Behavioral Statistics</em> 40 (2): 136–57.
+<a href="https://doi.org/10.3102/1076998615570945">https://doi.org/10.3102/1076998615570945</a>.</p>
 </div>
 <div id="ref-jiang2009">
 <p>Jiang, R., P. Manchanda, and P. E. Rossi. 2009. “Bayesian Analysis of
