@@ -455,11 +455,31 @@ p = post[1]
 names = vcat([length(p[s])==1 ? String(s) : String.(s).*string.(1:length(p[s])) for s in keys(p)]...)
 vals = hcat([vcat([length(v)==1 ? v : vec(v) for v in values(p)]...) for p in post]...)'
 chain = MCMCChains.Chains(reshape(vals, size(vals)..., 1), names)
-describe(chain[[&quot;β&quot;,&quot;σ&quot;,&quot;ρ&quot;,&quot;π&quot;]])
-plot(chain[[&quot;β&quot;,&quot;σ&quot;,&quot;ρ&quot;,&quot;π&quot;]])
+display(plot(chain[[&quot;β&quot;,&quot;σ&quot;,&quot;ρ&quot;,&quot;π&quot;]]))
 </code></pre>
 
 <p><img alt="" src="../figures/quasi_7_1.png" /></p>
+<pre><code class="julia">display(describe(chain[[&quot;β&quot;,&quot;σ&quot;,&quot;ρ&quot;,&quot;π&quot;]]))
+</code></pre>
+
+<pre><code>2-element Array{ChainDataFrame,1}
+
+Summary Statistics
+  parameters     mean     std  naive_se    mcse        ess   r_hat
+  ──────────  ───────  ──────  ────────  ──────  ─────────  ──────
+           β  -1.0440  0.2041    0.0065  0.0058   738.5279  0.9998
+           σ   0.1854  0.1318    0.0042  0.0050   683.0208  0.9998
+           π   0.9668  0.1519    0.0048  0.0035  1026.2301  1.0004
+           ρ   0.4984  0.1517    0.0048  0.0048  1094.7487  0.9992
+
+Quantiles
+  parameters     2.5%    25.0%    50.0%    75.0%    97.5%
+  ──────────  ───────  ───────  ───────  ───────  ───────
+           β  -1.4799  -1.1795  -1.0267  -0.8981  -0.6998
+           σ   0.0109   0.0819   0.1597   0.2736   0.4917
+           π   0.6688   0.8708   0.9730   1.0664   1.2728
+           ρ   0.1618   0.4114   0.5116   0.5994   0.7657
+</code></pre>
 <h1 id="quasi-bayesian">Quasi-Bayesian<a class="headerlink" href="#quasi-bayesian" title="Permanent link">&para;</a></h1>
 <p>Consider the following GMM setup. We have a data-depenendent function
 $g_i(\theta)$ such that $\Er[g_i(\theta_0)] = 0$ . Let the usual GMM
@@ -514,7 +534,7 @@ quasi-posterior is approximately normal with a data dependent mean and
 variance $D&rsquo;WD$.</p>
 <p>
 <script type="math/tex; mode=display">
-p_n( \sqrt{n}(\theta - \theta_0) ) \approx N\left( (D'WD)^{-1} \frac{1}{\sqrt{n}}\sum g_i(\theta_0) , D'WD \right)
+p_n( \sqrt{n}(\theta - \theta_0) ) \approx N\left( (D'WD)^{-1} \frac{1}{\sqrt{n}}\sum g_i(\theta_0) , (D'WD)^{-1} \right)
 </script>
 </p>
 <p>Finally, note that the usual asymptotic expansion of the GMM objective
@@ -527,21 +547,21 @@ gives</p>
 <p>then</p>
 <p>
 <script type="math/tex; mode=display">
-p_n( \sqrt{n}(\theta - \theta_0) ) \approx N\left(\sqrt{n}(\hat{\theta}^{GMM} - \theta_0), D'WD \right)
+p_n( \sqrt{n}(\theta - \theta_0) ) \approx N\left(\sqrt{n}(\hat{\theta}^{GMM} - \theta_0), (D'WD)^{-1} \right)
 </script>
 </p>
 <p>That is, the quasi-posterior is approximately normal with mean equal to
-the usual GMM estimate and variance $D&rsquo;WD$.</p>
+the usual GMM estimate and variance $(D&rsquo;WD)^{-1}$.</p>
 <p>If we treat the quasi-posterior and as a real posterior, the
 quasi-posterior mean or median will be consistent since they each
 approach $\hat{\theta}^{GMM}$ and $\hat{\theta}^{GMM}$ is consistent.</p>
 <p>Additionally, if we use quasi-posterior credible intervals for
 inference, they may or may not be consistent. In general, the
-quasi-posterior variance, $D&rsquo;WD$, differs from the asymptotic variance,
-$(D&rsquo;WD)^{-1}(D&rsquo;W\Omega W D)(D&rsquo;WD)^{-1}$, and quasi-posterior credible
-intervals will not be consistent. However, if we use an efficient
-weighting matrix, $W=\Omega^{-1}$, then the quasi-posterior credible
-intervals will be consistent.</p>
+quasi-posterior variance, $(D&rsquo;WD)^{-1}$, differs from the asymptotic
+variance, $(D&rsquo;WD)^{-1}(D&rsquo;W\Omega W D)(D&rsquo;WD)^{-1}$, and quasi-posterior
+credible intervals will not be consistent. However, if we use an
+efficient weighting matrix, $W=\Omega^{-1}$, then the quasi-posterior
+credible intervals will be consistent.</p>
 <p>See <a href="https://ocw.mit.edu/courses/economics/14-385-nonlinear-econometric-analysis-fall-2007/lecture-notes/lecture10_11.pdf">these
 notes</a>
 for more information, or (Chernozhukov and Hong
@@ -615,6 +635,8 @@ end
 </code></pre>
 <p>Now the code for the quasi-posterior.</p>
 <pre><code class="julia">using DynamicHMC, Random, LogDensityProblems, Parameters, TransformVariables, Distributions
+defaultpriors = (β=Normal(0,20),
+                 σ=truncated(Normal(0, 10), 0, Inf))
 
 struct RCIVLogitQB{T,Stype}
   x::Matrix{T}
@@ -627,9 +649,6 @@ struct RCIVLogitQB{T,Stype}
   W::Matrix{T}
 end
 
-
-defaultpriors = (β=Normal(0,20),
-                 σ=truncated(Normal(0, 10), 0, Inf))
 macro evalpriors(priors)
   first = true
   expr = :(1+1)
@@ -664,35 +683,15 @@ end
 gh = gausshermite(3)
 ν = (gh[1],gh[2]/sqrt(Base.π))
 prob = RCIVLogitQB(data.x, data.z, max.(1,data.s[1:J,:])./M, N, J,ν , defaultpriors, diagm(ones(J*J)))
-</code></pre>
-
-<pre><code>Error: MethodError: no method matching RCIVLogitQB(::Array{Float64,2}, ::Ar
-ray{Float64,2}, ::Array{Float64,2}, ::Int64, ::Int64, ::Tuple{Array{Float64
-,1},Array{Float64,1}}, ::NamedTuple{(:β, :σ),Tuple{Normal{Float64},Truncate
-d{Normal{Float64},Continuous,Float64}}}, ::Array{Float64,2})
-Closest candidates are:
-  RCIVLogitQB(::Array{T,2}, ::Array{T,2}, ::Array{Stype,2}, ::Int64, ::Int6
-4, ::Tuple{Array{Float64,1},Array{Float64,1}}, !Matched::NamedTuple{(:β, :σ
-, :π, :ρ, :Σx, :Ω),Tuple{Normal{Float64},Truncated{Normal{Float64},Continuo
-us,Float64},Normal{Float64},Normal{Float64},Wishart{Float64,PDMats.PDMat{Fl
-oat64,Array{Float64,2}}},Wishart{Float64,PDMats.PDMat{Float64,Array{Float64
-,2}}}}}, ::Array{T,2}) where {T, Stype} at none:3
-</code></pre>
-<pre><code class="julia">θ0 = (β=pm.β, σ=pm.σ )
+θ0 = (β=pm.β, σ=pm.σ )
 prob(θ0)
-</code></pre>
-
-<pre><code>Error: type NamedTuple has no field ξ
-</code></pre>
-<pre><code class="julia">t=as((β = asℝ, σ=asℝ₊))
+t=as((β = asℝ, σ=asℝ₊))
 x0 = inverse(t, θ0)
 P = TransformedLogDensity(t, prob)
 ∇P = ADgradient(:ForwardDiff, P)
 LogDensityProblems.logdensity_and_gradient(∇P, x0);
 </code></pre>
 
-<pre><code>Error: type NamedTuple has no field ξ
-</code></pre>
 <p>The chain here actually takes very little time to run, but we still
 cache the results.</p>
 <pre><code class="julia">warmup=default_warmup_stages(stepsize_search=nothing, doubling_stages=2)
@@ -709,8 +708,24 @@ p = post[1]
 names = vcat([length(p[s])==1 ? String(s) : String.(s).*string.(1:length(p[s])) for s in keys(p)]...)
 vals = hcat([vcat([length(v)==1 ? v : vec(v) for v in values(p)]...) for p in post]...)'
 chain = MCMCChains.Chains(reshape(vals, size(vals)..., 1), names)
-describe(chain[[&quot;β&quot;,&quot;σ&quot;]])
-plot(chain[[&quot;β&quot;,&quot;σ&quot;]])
+display(describe(chain[[&quot;β&quot;,&quot;σ&quot;]]))
+</code></pre>
+
+<pre><code>2-element Array{ChainDataFrame,1}
+
+Summary Statistics
+  parameters     mean     std  naive_se    mcse       ess   r_hat
+  ──────────  ───────  ──────  ────────  ──────  ────────  ──────
+           β  -1.1265  0.1489    0.0047  0.0079  417.6520  0.9998
+           σ   0.2925  0.2147    0.0068  0.0155  208.2311  0.9997
+
+Quantiles
+  parameters     2.5%    25.0%    50.0%    75.0%    97.5%
+  ──────────  ───────  ───────  ───────  ───────  ───────
+           β  -1.4356  -1.2249  -1.1238  -1.0214  -0.8575
+           σ   0.0169   0.1181   0.2508   0.4264   0.8112
+</code></pre>
+<pre><code class="julia">display(plot(chain[[&quot;β&quot;,&quot;σ&quot;]]))
 </code></pre>
 
 <p><img alt="" src="../figures/quasi_11_1.png" /></p>
@@ -724,40 +739,16 @@ for i in 1:N
   ξ = delta(prob.s[:,i], prob.x[:,i], σ, ν) - prob.x[:,i]*β
   m[:,i] .= vec(ξ*prob.z[:,i]')
 end
-</code></pre>
+W = inv(cov(m'))
 
-<pre><code>Error: MethodError: no method matching delta(::Array{Int64,1}, ::Array{Floa
-t64,1}, ::Float64, ::Tuple{Array{Float64,1},Array{Float64,1}})
-Closest candidates are:
-  delta(::AbstractArray{T,1} where T, ::AbstractArray{T,1} where T, !Matche
-d::D, ::Tuple{Array{Float64,1},Array{Float64,1}}) where D&lt;:ForwardDiff.Dual
- at none:5
-  delta(::AbstractArray{T,1}, !Matched::AbstractArray{T,1}, !Matched::T, ::
-Tuple{Array{Float64,1},Array{Float64,1}}) where T at none:4
-</code></pre>
-<pre><code class="julia">W = inv(cov(m'))
-</code></pre>
-
-<pre><code>Error: LAPACKException(1)
-</code></pre>
-<pre><code class="julia">prob = RCIVLogitQB(data.x, data.z, max.(1,data.s[1:J,:])./M, N, J,ν , defaultpriors,W)
-</code></pre>
-
-<pre><code>Error: UndefVarError: W not defined
-</code></pre>
-<pre><code class="julia">θ0 = (β=pm.β, σ=pm.σ )
+prob = RCIVLogitQB(data.x, data.z, max.(1,data.s[1:J,:])./M, N, J,ν , defaultpriors,W)
+θ0 = (β=pm.β, σ=pm.σ )
 prob(θ0)
-</code></pre>
-
-<pre><code>Error: type NamedTuple has no field ξ
-</code></pre>
-<pre><code class="julia">P = TransformedLogDensity(t, prob)
+P = TransformedLogDensity(t, prob)
 ∇P = ADgradient(:ForwardDiff, P)
 LogDensityProblems.logdensity_and_gradient(∇P, x0);
 </code></pre>
 
-<pre><code>Error: type NamedTuple has no field ξ
-</code></pre>
 <pre><code class="julia">warmup=default_warmup_stages(stepsize_search=nothing, doubling_stages=2)
 results = DynamicHMC.mcmc_keep_warmup(Random.GLOBAL_RNG, ∇P, 1000;initialization = (q = x0, ϵ=1e-5 ), reporter = LogProgressReport(nothing, 25, 15), warmup_stages =warmup)
 JLD2.@save &quot;jmd/qbw.jld2&quot; results
@@ -769,8 +760,24 @@ p = post[1]
 names = vcat([length(p[s])==1 ? String(s) : String.(s).*string.(1:length(p[s])) for s in keys(p)]...)
 vals = hcat([vcat([length(v)==1 ? v : vec(v) for v in values(p)]...) for p in post]...)'
 chain = MCMCChains.Chains(reshape(vals, size(vals)..., 1), names)
-describe(chain[[&quot;β&quot;,&quot;σ&quot;]])
-plot(chain[[&quot;β&quot;,&quot;σ&quot;]])
+display(describe(chain[[&quot;β&quot;,&quot;σ&quot;]]))
+</code></pre>
+
+<pre><code>2-element Array{ChainDataFrame,1}
+
+Summary Statistics
+  parameters     mean     std  naive_se    mcse      ess   r_hat
+  ──────────  ───────  ──────  ────────  ──────  ───────  ──────
+           β  -1.1757  0.2060    0.0065  0.0347  29.4229  1.0387
+           σ   0.5242  0.3871    0.0122  0.0627  30.9115  1.0478
+
+Quantiles
+  parameters     2.5%    25.0%    50.0%    75.0%    97.5%
+  ──────────  ───────  ───────  ───────  ───────  ───────
+           β  -1.7089  -1.2582  -1.1236  -1.0288  -0.8945
+           σ   0.0142   0.2108   0.4485   0.7655   1.3978
+</code></pre>
+<pre><code class="julia">display(plot(chain[[&quot;β&quot;,&quot;σ&quot;]]))
 </code></pre>
 
 <p><img alt="" src="../figures/quasi_14_1.png" /></p>
