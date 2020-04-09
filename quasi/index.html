@@ -131,7 +131,7 @@
 <p>This work is licensed under a <a href="http://creativecommons.org/licenses/by-sa/4.0/">Creative Commons Attribution-ShareAlike
 4.0 International
 License</a></p>
-<pre><code class="julia">using Plots, Distributions
+<pre><code class="julia">using Plots, Distributions, StatsPlots
 Plots.pyplot()
 </code></pre>
 
@@ -169,12 +169,12 @@ it in some detail.</p>
 with endogeneity. To keep things simple for illustrustration, we’ll
 assume that there’s a single endogenous variable, $x \in \mathbb{R}^J$,
 and market shares are given by <script type="math/tex; mode=display">
-s^*(\beta, \sigma, \xi; x) = \int \frac{e^{x_j\beta + \xi_j + x_j\sigma \nu}} 
+s^*(\beta, \sigma, \xi; x) = \int \frac{e^{x_j\beta + \xi_j + x_j\sigma \nu}}
 {1 + \sum_{\ell} e^{x_\ell\beta + \xi_\ell + x_\ell\sigma \nu}} d\Phi(\nu)/\sigma
 </script>
 </p>
 <p>The moment condition will be <script type="math/tex; mode=display">
-0 = \Er[\xi | z ] 
+0 = \Er[\xi | z ]
 </script>
 </p>
 <h2 id="fully-specified-likelihood">Fully specified likelihood<a class="headerlink" href="#fully-specified-likelihood" title="Permanent link">&para;</a></h2>
@@ -201,7 +201,7 @@ and $\Xi=\rho I_J$.</p>
 draws from a Multinomial distribtion</p>
 <p>
 <script type="math/tex; mode=display">
-M \mathrm{round}(s) ~ \mathrm{Multinomial}(M, s^*(\beta,\sigma,\xi)) 
+M \mathrm{round}(s) ~ \mathrm{Multinomial}(M, s^*(\beta,\sigma,\xi))
 </script>
 </p>
 <p>where $s^*()$ is the share function implied by the random coefficients
@@ -217,7 +217,7 @@ and arguably making the posterior calculation harder to debug and
 extend.</p>
 <pre><code class="julia">using Turing, FastGaussQuadrature, LinearAlgebra, NNlib, JLD2
 
-@model rcivlogit(x=missing, z=missing, s=missing, 
+@model rcivlogit(x=missing, z=missing, s=missing,
                  M=100, ν=gausshermite(12),
                  param=missing, N=10,J=1, ::Type{T}=Float64) where {T &lt;: Real} =
   begin
@@ -230,12 +230,12 @@ extend.</p>
     J, N = size(x)
     ξ = Matrix{T}(undef, J, N)
     if !ismissing(param)
-      β = pm.β
-      σ = pm.σ
-      Σx = pm.Σx
-      π = pm.π
-      ρ = pm.ρ
-      Ω = pm.Ω
+      β = param.β
+      σ = param.σ
+      Σx = param.Σx
+      π = param.π
+      ρ = param.ρ
+      Ω = param.Ω
     else
       # Priors
       β ~ Normal(0, 20.0)
@@ -308,9 +308,9 @@ for k in keys(pm)
 end
 </code></pre>
 
-<pre><code>Error: The backend must not support the series type Val{:density}, and ther
-e isn't a series recipe defined.
-</code></pre>
+<p><img alt="" src="../figures/quasi_4_1.png" /> <img alt="" src="../figures/quasi_4_2.png" />
+<img alt="" src="../figures/quasi_4_3.png" /> <img alt="" src="../figures/quasi_4_4.png" />
+<img alt="" src="../figures/quasi_4_5.png" /> <img alt="" src="../figures/quasi_4_6.png" /></p>
 <pre><code class="julia">display(describe(chain[[keys(pm)...]]))
 </code></pre>
 
@@ -393,7 +393,7 @@ struct RCIVLogit{T,Stype}
 end
 
 
-# A 
+# A
 function (d::RCIVLogit)(θ)
   @unpack ξ, β, σ, π, ρ, sξ, uξ, sx, ux = θ
   @unpack x, z, s, N, J, ν = d
@@ -401,7 +401,7 @@ function (d::RCIVLogit)(θ)
   Σx =Symmetric(ux'*Diagonal(exp.(sx).^2)*ux)
   Ω = Symmetric(uξ'*Diagonal(exp.(sξ).^2)*uξ)
   # priors
-  logp=@evalpriors(d.priors)  
+  logp=@evalpriors(d.priors)
   # loglikelihood
   logp += loglikelihood(MvNormal(zeros(J), Ω), ξ)
   logp += loglikelihood(MvNormal(zeros(J), Σx), x - π*z - ρ*ξ)
@@ -411,13 +411,13 @@ function (d::RCIVLogit)(θ)
     μ = softmax(μ, dims=1)
     p = (μ*ν[2])/sqrt(Base.π)
     logp += logpdf(Multinomial(sum(s[:,i]), p),s[:,i])
-  end  
+  end
   return(logp)
 end
 
 ν = gausshermite(3)
 prob = RCIVLogit(data.x, data.z, data.s, N, J,ν , defaultpriors)
-θ0 = ( ξ=data.ξ, β=pm.β, σ=pm.σ, π=pm.π, ρ=pm.ρ, 
+θ0 = ( ξ=data.ξ, β=pm.β, σ=pm.σ, π=pm.π, ρ=pm.ρ,
        sξ = log.(sqrt.(diag(pm.Ω))),
        uξ=cholesky(pm.Ω ./ sqrt.(diag(pm.Ω)*diag(pm.Ω)')).U,
        sx = log.(sqrt.(diag(pm.Σx))),
@@ -459,9 +459,7 @@ describe(chain[[&quot;β&quot;,&quot;σ&quot;,&quot;ρ&quot;,&quot;π&quot;]])
 plot(chain[[&quot;β&quot;,&quot;σ&quot;,&quot;ρ&quot;,&quot;π&quot;]])
 </code></pre>
 
-<pre><code>Error: The backend must not support the series type Val{:density}, and ther
-e isn't a series recipe defined.
-</code></pre>
+<p><img alt="" src="../figures/quasi_7_1.png" /></p>
 <h1 id="quasi-bayesian">Quasi-Bayesian<a class="headerlink" href="#quasi-bayesian" title="Permanent link">&para;</a></h1>
 <p>Consider the following GMM setup. We have a data-depenendent function
 $g_i(\theta)$ such that $\Er[g_i(\theta_0)] = 0$ . Let the usual GMM
@@ -500,7 +498,7 @@ $\log(p_n(\theta)$)</p>
 <p>If we take a second order Taylor expansion,</p>
 <p>
 <script type="math/tex; mode=display">
-\log(p_n(\theta)) \approx  log(p_n(\theta_0)) + -n 2(\theta - \theta_0)' D' W (\frac{1}{n} g_i(\theta_0)) + \frac{-n}{2} (\theta-\theta_0)'D W D' (\theta-\theta_0) 
+\log(p_n(\theta)) \approx  log(p_n(\theta_0)) + -n 2(\theta - \theta_0)' D' W (\frac{1}{n} g_i(\theta_0)) + \frac{-n}{2} (\theta-\theta_0)'D W D' (\theta-\theta_0)
 </script>
 </p>
 <p>and complete the square</p>
@@ -589,7 +587,7 @@ function delta(s::AbstractVector{T}, x::AbstractVector{T},
 end
 
 # Use the implicit function theorem to make ForwardDiff work with delta()
-function delta(s::AbstractVector, x::AbstractVector, 
+function delta(s::AbstractVector, x::AbstractVector,
                σ::D, ν::typeof(gausshermite(1))) where {D &lt;: ForwardDiff.Dual}
   σval = ForwardDiff.value.(σ)
   δ = delta(s,x,σval, ν)
@@ -715,9 +713,7 @@ describe(chain[[&quot;β&quot;,&quot;σ&quot;]])
 plot(chain[[&quot;β&quot;,&quot;σ&quot;]])
 </code></pre>
 
-<pre><code>Error: The backend must not support the series type Val{:density}, and ther
-e isn't a series recipe defined.
-</code></pre>
+<p><img alt="" src="../figures/quasi_11_1.png" /></p>
 <p>The quasi-posterior means look okay. The standard deviation and
 quantiles are not consistent because we didn’t use an efficient
 weighting matrix above. Let’s use one and repeat.</p>
@@ -777,9 +773,7 @@ describe(chain[[&quot;β&quot;,&quot;σ&quot;]])
 plot(chain[[&quot;β&quot;,&quot;σ&quot;]])
 </code></pre>
 
-<pre><code>Error: The backend must not support the series type Val{:density}, and ther
-e isn't a series recipe defined.
-</code></pre>
+<p><img alt="" src="../figures/quasi_14_1.png" /></p>
 <p>These posterior standard deviations and quantiles can be used for
 inference.</p>
 <h2 id="about">About<a class="headerlink" href="#about" title="Permanent link">&para;</a></h2>
