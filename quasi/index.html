@@ -112,6 +112,10 @@
             
             <li class="nav-item" data-level="1"><a href="#quasi-bayesian" class="nav-link">Quasi-Bayesian</a>
               <ul class="nav flex-column">
+            <li class="nav-item" data-level="2"><a href="#implementation" class="nav-link">Implementation</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
             <li class="nav-item" data-level="2"><a href="#about" class="nav-link">About</a>
               <ul class="nav flex-column">
               </ul>
@@ -133,6 +137,11 @@ Plots.pyplot()
 
 <pre><code>Plots.PyPlotBackend()
 </code></pre>
+<p>
+<script type="math/tex; mode=display">
+\def{\Er}{\mathrm{E}}
+</script>
+</p>
 <h1 id="introduction">Introduction<a class="headerlink" href="#introduction" title="Permanent link">&para;</a></h1>
 <p>Traditional bayesian methods require a fully specified statistical
 model, so that a likelihood can be calculated. In particular, this
@@ -175,16 +184,16 @@ normally distributed,</p>
 <p>The endogenous variable, $x$, has a normal first stage,</p>
 <p>
 <script type="math/tex; mode=display">
- x = z \Pi + \xi \Rho + u \;,\; u \sim N(0, \Sigma_x)
+x = z \Pi + \xi \Xi + u \;,\; u \sim N(0, \Sigma_x)
 </script>
 </p>
 <p>and to keep the number of parameters small, we’ll impose $\Pi=\pi I_J$
-and $\Rho=\rho I_J$.</p>
+and $\Xi=\rho I_J$.</p>
 <p>Finally, we’ll assume the observed market shares $s_j$ come from $M$
 draws from a Multinomial distribtion</p>
 <p>
 <script type="math/tex; mode=display">
-M round(s) ~ Multinomial(M, s^*(\beta,\sigma,\xi)) 
+M \mathrm{round}(s) ~ \mathrm{Multinomial}(M, s^*(\beta,\sigma,\xi)) 
 </script>
 </p>
 <p>where $s^*()$ is the share function implied by the random coefficients
@@ -247,18 +256,9 @@ pm = (β=-1.0, σ=0.1, ρ=0.5, Σx=diagm(ones(J)), Ω=I+0.5*ones(J,J), π=1.0)
 N = 20
 M = 100
 # simulate the data
-data=rcivlogit(missing, missing ,missing, M, gausshermite(3), pm, N, J)()
+data=rcivlogit(missing, missing ,missing, M, gausshermite(3), pm, N, J)();
 </code></pre>
 
-<pre><code>(x = [-0.9334967930273279 0.18014970868181757 … 1.8618306445187094 -1.80017
-74234337438; 0.5895096155630419 -0.5018631782301344 … -4.164261780255877 0.
-7764049179614305], z = [-0.41218446321553814 -0.6529617723859734 … 0.067543
-84576170645 -1.0437788973484199; 1.2808960902170943 0.07124692216634719 … -
-2.7210577300305805 0.2106318587616567], s = [37 40 … 0 60; 19 20 … 99 9; 44
- 40 … 1 31], ξ = [-0.9206312572867548 0.7289132517526565 … 1.65120134387043
-3 -1.0004380753509403; 0.26942178162504676 -1.1017208848247213 … 0.25508479
-2470061 -1.1251567395426023])
-</code></pre>
 <p>Some remarks on the code</p>
 <ul>
 <li>
@@ -271,7 +271,7 @@ data=rcivlogit(missing, missing ,missing, M, gausshermite(3), pm, N, J)()
 <p>We use Gauss Hermite quadrature to integrate out the random
     coefficient. 3 integration points is not going to calculate the
     integral very accurately, but, since we use the same integration
-    approach during estimation, the inaccuracy won’t matter.</p>
+    approach during estimation it will work out well.</p>
 </li>
 </ul>
 <p>The Wishart prior distributions for the covariance matrices are not
@@ -285,7 +285,7 @@ Wishart prior follows the advice of (Chung et al.
 covariance matrices (which were causing numeric problems during the
 tuning stages of NUTS with other priors, like the LKJ distribution).</p>
 <h3 id="results">Results<a class="headerlink" href="#results" title="Permanent link">&para;</a></h3>
-<p>We can simulate the posterior with the following code. It takes some
+<p>We can sample from the posterior with the following code. It takes some
 time to run.</p>
 <pre><code class="julia">model = rcivlogit(data.x, data.z, data.s, M, gausshermite(3), missing, N,J)
 chain = Turing.sample(model, NUTS(0.65), 1000, progress=true, verbose=true)
@@ -295,7 +295,15 @@ JLD2.@save &quot;jmd/turing.jld2&quot; chain model data
 <p>Let’s look at the posteriors. The chain also contains posteriors for all
 $JN$ values of $\xi$, which are not going to be displayed.</p>
 <pre><code class="julia">JLD2.@load &quot;jmd/turing.jld2&quot; chain model data
-display(describe(chain[[keys(pm)...]]))
+for k in keys(pm)
+  display(plot(chain[k]))
+end
+</code></pre>
+
+<p><img alt="" src="../figures/quasi_4_1.png" /> <img alt="" src="../figures/quasi_4_2.png" />
+<img alt="" src="../figures/quasi_4_3.png" /> <img alt="" src="../figures/quasi_4_4.png" />
+<img alt="" src="../figures/quasi_4_5.png" /> <img alt="" src="../figures/quasi_4_6.png" /></p>
+<pre><code class="julia">display(describe(chain[[keys(pm)...]]))
 </code></pre>
 
 <pre><code>2-element Array{ChainDataFrame,1}
@@ -332,28 +340,131 @@ Quantiles
            ρ  -0.4314   0.0055   0.2708   0.4913   0.8023
            σ   0.0165   0.1439   0.2621   0.4246   0.6918
 </code></pre>
-<pre><code class="julia">for k in keys(pm)
-  display(plot(chain[k]))
+<p>We can see that the chain mixed pretty well. The posterior of the
+covariance matrices are somewhat high, but the other posteriors of the
+other parameters appear centered on their true values. Poorly estimated
+covariances are typical for this model (and many other models),
+regardless of estimation method.</p>
+<h3 id="dynamichmc-implementation">DynamicHMC Implementation<a class="headerlink" href="#dynamichmc-implementation" title="Permanent link">&para;</a></h3>
+<p>DynamicHMC.jl is a useful alternative to Turing.jl. With DynamicHMC, you
+must write a function to evaluate the log posterior. This is arguably
+slightly more work than Turing’s modeling language (although it avoids
+needing to learn Turing’s language), but it also gives you more control
+over the code. This tends to result in more efficient code.</p>
+<pre><code class="julia">using DynamicHMC, Random, LogDensityProblems, Parameters, TransformVariables, Distributions, MCMCChains
+
+defaultpriors = (β=Normal(0,20),
+                 σ=truncated(Normal(0, 10), 0, Inf),
+                 π=Normal(0,20),
+                 ρ=Normal(0,20),
+                 Σx=Wishart(J+2, diagm(ones(J))*1/(2*0.001)),
+                 Ω =Wishart(J+2, diagm(ones(J))*1/(2*0.001)))
+macro evalpriors(priors)
+  first = true
+  expr = :(1+1)
+  for k in keys(defaultpriors)
+    if first
+      expr = :(logpdf($(priors).$k, $k))
+      first = false
+    else
+      expr = :($expr + logpdf($(priors).$k, $k))
+    end
+  end
+  return(esc(expr))
 end
+
+# We define a struct to hold the data relevant to the model
+struct RCIVLogit{T,Stype}
+  x::Matrix{T}
+  z::Matrix{T}
+  s::Matrix{Stype}
+  N::Int64
+  J::Int64
+  ν::typeof(gausshermite(1))
+  priors::typeof(defaultpriors)
+end
+
+
+# A 
+function (d::RCIVLogit)(θ)
+  @unpack ξ, β, σ, π, ρ, sξ, uξ, sx, ux = θ
+  @unpack x, z, s, N, J, ν = d
+  T = typeof(d.x[1,1]*β)
+  Σx =Symmetric(ux'*Diagonal(exp.(sx).^2)*ux)
+  Ω = Symmetric(uξ'*Diagonal(exp.(sξ).^2)*uξ)
+  # priors
+  logp=@evalpriors(d.priors)  
+  # loglikelihood
+  logp += loglikelihood(MvNormal(zeros(J), Ω), ξ)
+  logp += loglikelihood(MvNormal(zeros(J), Σx), x - π*z - ρ*ξ)
+  μ = zeros(T,  J + 1 , length(ν[1]))
+  for i in 1:N
+    @views μ[1:J,:] .= x[:,i]*β + ξ[:,i] .+ x[:,i]*σ*sqrt(2)*ν[1]'
+    μ = softmax(μ, dims=1)
+    p = (μ*ν[2])/sqrt(Base.π)
+    logp += logpdf(Multinomial(sum(s[:,i]), p),s[:,i])
+  end  
+  return(logp)
+end
+
+ν = gausshermite(3)
+prob = RCIVLogit(data.x, data.z, data.s, N, J,ν , defaultpriors)
+θ0 = ( ξ=data.ξ, β=pm.β, σ=pm.σ, π=pm.π, ρ=pm.ρ, 
+       sξ = log.(sqrt.(diag(pm.Ω))),
+       uξ=cholesky(pm.Ω ./ sqrt.(diag(pm.Ω)*diag(pm.Ω)')).U,
+       sx = log.(sqrt.(diag(pm.Σx))),
+       ux=cholesky(pm.Σx ./ sqrt.(diag(pm.Σx)*diag(pm.Σx)')).U
+      )
+prob(θ0)
+
+# A transformation from ℝ^(# parameters) to the parameters
+# see Transformations.jl
+t= as((ξ=as(Array,asℝ,J,N),
+       β = asℝ, σ=asℝ₊, π=asℝ, ρ=asℝ,
+       sξ=as(Array,asℝ,J),
+       uξ=CorrCholeskyFactor(J),
+       sx=as(Array,asℝ,J),
+       ux=CorrCholeskyFactor(J)) )
+x0 = inverse(t, θ0)
+
+# wrap our logposterior and transform into the struc that DynamicHMC
+# uses for sampling
+P = TransformedLogDensity(t, prob)
+∇P = ADgradient(:ForwardDiff, P);
 </code></pre>
 
-<p><img alt="" src="../figures/quasi_4_1.png" /> <img alt="" src="../figures/quasi_4_2.png" />
-<img alt="" src="../figures/quasi_4_3.png" /> <img alt="" src="../figures/quasi_4_4.png" />
-<img alt="" src="../figures/quasi_4_5.png" /> <img alt="" src="../figures/quasi_4_6.png" /></p>
-<h3 id="dynamichmc-implementation">DynamicHMC Implementation<a class="headerlink" href="#dynamichmc-implementation" title="Permanent link">&para;</a></h3>
+<pre><code class="julia">warmup_stages = default_warmup_stages(;doubling_stages=2, M=Symmetric)
+results = DynamicHMC.mcmc_keep_warmup(Random.GLOBAL_RNG, ∇P, 1000;
+                                      initialization = (q = x0, ),
+                                      reporter = LogProgressReport(nothing, 25, 15),
+                                      warmup_stages=warmup_stages)
+JLD2.@save &quot;jmd/dhmc.jld2&quot; results
+</code></pre>
+
+<pre><code class="julia">JLD2.@load &quot;jmd/dhmc.jld2&quot; results
+post = transform.(t,results.inference.chain)
+p = post[1]
+names = vcat([length(p[s])==1 ? String(s) : String.(s).*string.(1:length(p[s])) for s in keys(p)]...)
+vals = hcat([vcat([length(v)==1 ? v : vec(v) for v in values(p)]...) for p in post]...)'
+chain = MCMCChains.Chains(reshape(vals, size(vals)..., 1), names)
+describe(chain[[&quot;β&quot;,&quot;σ&quot;,&quot;ρ&quot;,&quot;π&quot;]])
+plot(chain[[&quot;β&quot;,&quot;σ&quot;,&quot;ρ&quot;,&quot;π&quot;]])
+</code></pre>
+
+<p><img alt="" src="../figures/quasi_7_1.png" /></p>
 <h1 id="quasi-bayesian">Quasi-Bayesian<a class="headerlink" href="#quasi-bayesian" title="Permanent link">&para;</a></h1>
 <p>Consider the following GMM setup. We have a data-depenendent function
 $g_i(\theta)$ such that $\Er[g_i(\theta_0)] = 0$ . Let the usual GMM
 estimator be</p>
 <p>
 <script type="math/tex; mode=display">
-\hat{\theta}_n = \argmin_\theta n(\frac{1}{n} g_i(\theta) )' W (\frac{1}{n} g_i(\theta) )
+\hat{\theta}^{GMM} = \argmin_\theta n(\frac{1}{n} g_i(\theta) )' W (\frac{1}{n} g_i(\theta))
 </script>
 </p>
 <p>Assume the usual regularity conditions so that</p>
 <p>
 <script type="math/tex; mode=display">
-    \sqrt{n}(\hat{\theta}_n - \theta_0) \to N\left(0, (D'WD)^{-1}(D'W\Omega W D)  (D'WD)^{-1} \right)
+    \sqrt{n}(\hat{\theta}^{GMM} - \theta_0) \to N\left(0, (D'WD)^{-1}(D'W\Omega W D)  (D'WD)^{-1} \right)
 </script>
 </p>
 <p>where $D = D_\theta \Er[g_i(\theta_0)]$ and
@@ -366,19 +477,268 @@ $n\to \infty$.</p>
 the log density of the asymptotic distribution is</p>
 <p>
 <script type="math/tex; mode=display">
-  p_\infy(\theta) \propto -\frac{n}{2}(\theta - \theta_0)' \Sigma^{-1} (\theta - \theta_0)
+  p_\infty(\theta) \propto -\frac{n}{2}(\theta - \theta_0)' \Sigma^{-1} (\theta - \theta_0)
 </script>
 </p>
-<p>Compare that to minus the GMM objective function</p>
+<p>Compare that to minus the GMM objective function (which we’ll denote by
+$\log(p_n(\theta)$)</p>
 <p>
 <script type="math/tex; mode=display">
-p_n(\theta) \propto -n ...
+\log(p_n(\theta)) = -n(\frac{1}{n} g_i(\theta) )' W (\frac{1}{n} g_i(\theta) )
 </script>
 </p>
+<p>If we take a second order Taylor expansion,</p>
+<p>
+<script type="math/tex; mode=display">
+\log(p_n(\theta)) \approx  log(p_n(\theta_0)) + -n 2(\theta - \theta_0)' D' W (\frac{1}{n} g_i(\theta_0)) + \frac{-n}{2} (\theta-\theta_0)'D W D' (\theta-\theta_0) 
+</script>
+</p>
+<p>and complete the square</p>
+<p>
+<script type="math/tex; mode=display">
+log(p_n(\theta)) \approx  -\frac{n}{2} ( (\theta - \theta_0) - (D'WD)^{-1} \frac{1}{n}\sum g_i(\theta_0) )' D' W D ((\theta - \theta_0) - (D'WD)^{-1} \frac{1}{n}\sum g_i(\theta_0) ) + C
+</script>
+</p>
+<p>where $C$ is a constant that does not depend on $\theta$.</p>
+<p>From this we can see that if we treat $\log(p_n(\theta))$ as a log
+posterior distribution, we get that that conditional on the data, the
+quasi-posterior is approximately normal with a data dependent mean and
+variance $D&rsquo;WD$.</p>
+<p>
+<script type="math/tex; mode=display">
+p_n( \sqrt{n}(\theta - \theta_0) ) \approx N\left( (D'WD)^{-1} \frac{1}{\sqrt{n}}\sum g_i(\theta_0) , D'WD \right)
+</script>
+</p>
+<p>Finally, note that the usual asymptotic expansion of the GMM objective
+gives</p>
+<p>\$\$</p>
+<p><code>\sqrt{n}</code>( <code>\hat{\theta}</code>\^{GMM} - <code>\theta</code>_0 ) =
+(D’WD)\^{-1}
+<code>\frac{1}{\sqrt{n}}</code><code>\sum</code>g_i(<code>\theta</code>_0) +
+o_p(1), then</p>
+<p>
+<script type="math/tex; mode=display">
+p_n( \sqrt{n}(\theta - \theta_0) ) \approx N\left(\sqrt{n}(\hat{\theta}^{GMM} - \theta_0), D'WD \right)
+</script>
+</p>
+<p>That is, the quasi-posterior is approximately normal with mean equal to
+the usual GMM estimate, and variance $D&rsquo;WD$.</p>
+<p>If we treat the quasi-posterior and as a real posterior, the
+quasi-posterior mean or median will be consistent since they each
+approach $\hat{\theta}^{GMM}$ and $\hat{\theta}^{GMM}$ is consistent.</p>
+<p>Additionally, if we use quasi-posterior credible intervals for
+inference, they may or may not be consistent. In general, the
+quasi-posterior variance, $D&rsquo;WD$, differs from the asymptotic variance,
+$(D&rsquo;WD)^{-1}(D&rsquo;W\Omega W D)(D&rsquo;WD)^{-1}$, and quasi-posterior credible
+intervals will not be consistent. However, if we use an efficient
+weighting matrix, $W=\Omega^{-1}$, then the quasi-posterior credible
+intervals will be consistent.</p>
 <p>See <a href="https://ocw.mit.edu/courses/economics/14-385-nonlinear-econometric-analysis-fall-2007/lecture-notes/lecture10_11.pdf">these
 notes</a>
 for more information, or (Chernozhukov and Hong
 <a href="#ref-chernozhukov2003">2003</a>) for complete details.</p>
+<h2 id="implementation">Implementation<a class="headerlink" href="#implementation" title="Permanent link">&para;</a></h2>
+<p>To compute moment conditions, we need to solve for $\xi$ given the
+parameters. Here’s the associated code. It’s similar to what we used in
+<a href="https://github.com/UBCECON567/BLPDemand.jl">BLPDemand.jl</a>.</p>
+<pre><code class="julia">using DynamicHMC, Random, LogDensityProblems, Parameters, TransformVariables, Distributions, ForwardDiff, NLsolve
+
+function share(δ::AbstractVector, σ, x::AbstractVector, ν::typeof(gausshermite(1)))
+  J = length(δ)
+  S = length(ν[1])
+  s = zeros(promote_type(eltype(δ), eltype(σ)),size(δ))
+  si = similar(s)
+  @inbounds for i in 1:S
+    si .= δ + σ*x*ν[1][i]
+    # to prevent overflow from exp(δ + ...)
+    simax = max(maximum(si), 0)
+    si .-= simax
+    si .= exp.(si)
+    si .= si./(exp.(-simax) + sum(si))
+    s .+= si*ν[2][i]
+  end
+  s .+= eps(eltype(s))
+  return(s)
+end
+
+function delta(s::AbstractVector{T}, x::AbstractVector{T},
+               σ::T, ν::typeof(gausshermite(1))) where T
+  tol = 1e-6
+  out = try
+    sol=NLsolve.fixedpoint(d-&gt;(d .+ log.(s) .- log.(share(d, σ, x, ν))),
+                           log.(s) .- log.(1-sum(s)),
+                           method = :anderson, m=4,
+                           xtol=tol, ftol=tol,
+                           iterations=100, show_trace=false)
+    sol.zero
+  catch
+    log.(s) .- log.(1-sum(s))
+  end
+  return(out)
+end
+
+# Use the implicit function theorem to make ForwardDiff work with delta()
+function delta(s::AbstractVector, x::AbstractVector, 
+               σ::D, ν::typeof(gausshermite(1))) where {D &lt;: ForwardDiff.Dual}
+  σval = ForwardDiff.value.(σ)
+  δ = delta(s,x,σval, ν)
+  ∂δ = ForwardDiff.jacobian(d -&gt; share(d, σval, x, ν), δ)
+  ∂σ = ForwardDiff.jacobian(s -&gt; share(δ, s..., x, ν), [σval])
+  out = Vector{typeof(σ)}(undef, length(δ))
+  Jv = try
+    -∂δ \ ∂σ
+  catch
+    zeros(eltype(∂σ),size(∂σ))
+  end
+  Jc = zeros(ForwardDiff.valtype(D), length(σ), ForwardDiff.npartials(D))
+  for i in eachindex(σ)
+    Jc[i,:] .= ForwardDiff.partials(σ[i])
+  end
+  Jn = Jv * Jc
+  for i in eachindex(out)
+    out[i] = D(δ[i], ForwardDiff.Partials(tuple(Jn[i,:]...)))
+  end
+  return(out)
+end
+</code></pre>
+
+<pre><code>delta (generic function with 2 methods)
+</code></pre>
+<p>Now the code for the quasi-posterior.</p>
+<pre><code class="julia">using DynamicHMC, Random, LogDensityProblems, Parameters, TransformVariables, Distributions
+
+struct RCIVLogitQB{T,Stype}
+  x::Matrix{T}
+  z::Matrix{T}
+  s::Matrix{Stype}
+  N::Int64
+  J::Int64
+  ν::typeof(gausshermite(1))
+  priors::typeof(defaultpriors)
+  W::Matrix{T}
+end
+</code></pre>
+
+<pre><code>Error: invalid redefinition of constant RCIVLogitQB
+</code></pre>
+<pre><code class="julia">defaultpriors = (β=Normal(0,20),
+                 σ=truncated(Normal(0, 10), 0, Inf))
+macro evalpriors(priors)
+  first = true
+  expr = :(1+1)
+  for k in keys(defaultpriors)
+    if first
+      expr = :(logpdf($(priors).$k, $k))
+      first = false
+    else
+      expr = :($expr + logpdf($(priors).$k, $k))
+    end
+  end
+  return(esc(expr))
+end
+
+function (d::RCIVLogitQB)(θ)
+  @unpack β, σ = θ
+  @unpack x, z, s, N, J, ν, priors, W = d
+  T = typeof(x[1,1]*β)
+  # priors
+  logp = @evalpriors(d.priors)
+  # quasi-loglikelihood
+  m = zeros(T, J*J)
+  for i in 1:N
+    ξ = delta(s[:,i], x[:,i], σ, ν) - x[:,i]*β
+    m .+= vec(ξ*z[:,i]')
+  end
+  m ./= N
+  logp += -0.5*N*m'*W*m #logpdf(MvNormal(zeros(length(m)), W), m)
+  return(logp)
+end
+
+gh = gausshermite(3)
+ν = (gh[1],gh[2]/sqrt(Base.π))
+prob = RCIVLogitQB(data.x, data.z, max.(1,data.s[1:J,:])./M, N, J,ν , defaultpriors, diagm(ones(J*J)))
+θ0 = (β=pm.β, σ=pm.σ )
+prob(θ0)
+t=as((β = asℝ, σ=asℝ₊))
+x0 = inverse(t, θ0)
+P = TransformedLogDensity(t, prob)
+∇P = ADgradient(:ForwardDiff, P)
+LogDensityProblems.logdensity_and_gradient(∇P, x0);
+</code></pre>
+
+<p>The chain here actually takes very little time to run, but we still
+cache the results.</p>
+<pre><code class="julia">warmup=default_warmup_stages(stepsize_search=nothing, doubling_stages=2)
+results = DynamicHMC.mcmc_keep_warmup(Random.GLOBAL_RNG, ∇P, 1000;
+                                      initialization = (q = x0, ϵ=1e-5 ),
+                                      reporter = LogProgressReport(nothing, 25, 15),
+                                      warmup_stages =warmup)
+JLD2.@save &quot;jmd/qb.jld2&quot; results
+</code></pre>
+
+<pre><code class="julia">JLD2.@load &quot;jmd/qb.jld2&quot; results
+post = transform.(t,results.inference.chain)
+p = post[1]
+names = vcat([length(p[s])==1 ? String(s) : String.(s).*string.(1:length(p[s])) for s in keys(p)]...)
+vals = hcat([vcat([length(v)==1 ? v : vec(v) for v in values(p)]...) for p in post]...)'
+chain = MCMCChains.Chains(reshape(vals, size(vals)..., 1), names)
+describe(chain[[&quot;β&quot;,&quot;σ&quot;]])
+plot(chain[[&quot;β&quot;,&quot;σ&quot;]])
+</code></pre>
+
+<p><img alt="" src="../figures/quasi_11_1.png" /></p>
+<p>The quasi-posterior means look okay. The standard deviation and
+quantiles are not consistent because we didn’t use an efficient
+weighting matrix above. Let’s use one and repeat.</p>
+<pre><code class="julia">σ = mean(chain[&quot;σ&quot;].value)
+β = mean(chain[&quot;β&quot;].value)
+m = zeros(J*J, N)
+for i in 1:N
+  ξ = delta(prob.s[:,i], prob.x[:,i], σ, ν) - prob.x[:,i]*β
+  m[:,i] .= vec(ξ*prob.z[:,i]')
+end
+W = Symmetric(inv(cov(m')))
+
+prob = RCIVLogitQB(data.x, data.z, max.(1,data.s[1:J,:])./M, N, J,ν , defaultpriors,W)
+</code></pre>
+
+<pre><code>Error: MethodError: no method matching RCIVLogitQB(::Array{Float64,2}, ::Ar
+ray{Float64,2}, ::Array{Float64,2}, ::Int64, ::Int64, ::Tuple{Array{Float64
+,1},Array{Float64,1}}, ::NamedTuple{(:β, :σ),Tuple{Normal{Float64},Truncate
+d{Normal{Float64},Continuous,Float64}}}, ::Symmetric{Float64,Array{Float64,
+2}})
+Closest candidates are:
+  RCIVLogitQB(::Array{T,2}, ::Array{T,2}, ::Array{Stype,2}, ::Int64, ::Int6
+4, ::Tuple{Array{Float64,1},Array{Float64,1}}, ::NamedTuple{(:β, :σ),Tuple{
+Normal{Float64},Truncated{Normal{Float64},Continuous,Float64}}}, !Matched::
+Array{T,2}) where {T, Stype} at /home/paul/.julia/dev/Bayes101/docs/jmd/qb.
+jl:67
+</code></pre>
+<pre><code class="julia">θ0 = (β=pm.β, σ=pm.σ )
+prob(θ0)
+P = TransformedLogDensity(t, prob)
+∇P = ADgradient(:ForwardDiff, P)
+LogDensityProblems.logdensity_and_gradient(∇P, x0);
+</code></pre>
+
+<pre><code class="julia">warmup=default_warmup_stages(stepsize_search=nothing, doubling_stages=2)
+results = DynamicHMC.mcmc_keep_warmup(Random.GLOBAL_RNG, ∇P, 1000;initialization = (q = x0, ϵ=1e-5 ), reporter = LogProgressReport(nothing, 25, 15), warmup_stages =warmup)
+JLD2.@save &quot;jmd/qbw.jld2&quot; results
+</code></pre>
+
+<pre><code class="julia">JLD2.@load &quot;jmd/qbw.jld2&quot; results
+post = transform.(t,results.inference.chain)
+p = post[1]
+names = vcat([length(p[s])==1 ? String(s) : String.(s).*string.(1:length(p[s])) for s in keys(p)]...)
+vals = hcat([vcat([length(v)==1 ? v : vec(v) for v in values(p)]...) for p in post]...)'
+chain = MCMCChains.Chains(reshape(vals, size(vals)..., 1), names)
+describe(chain[[&quot;β&quot;,&quot;σ&quot;]])
+plot(chain[[&quot;β&quot;,&quot;σ&quot;]])
+</code></pre>
+
+<p><img alt="" src="../figures/quasi_14_1.png" /></p>
+<p>These posterior standard deviations and quantiles can be used for
+inference.</p>
 <h2 id="about">About<a class="headerlink" href="#about" title="Permanent link">&para;</a></h2>
 <p>This meant to accompany <a href="https://faculty.arts.ubc.ca/pschrimpf/565/11-bayesianEstimation.pdf">these slides on Bayesian methods in
 IO.</a></p>
