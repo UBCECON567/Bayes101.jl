@@ -139,7 +139,15 @@ Plots.pyplot()
 </code></pre>
 <p>
 <script type="math/tex; mode=display">
-\def{\Er}{\mathrm{E}}
+\def\indep{\perp\!\!\!\perp}
+\def\Er{\mathrm{E}}
+\def\R{\mathbb{R}}
+\def\En{{\mathbb{E}_n}}
+\def\Pr{\mathrm{P}}
+\newcommand{\norm}[1]{\left\Vert {#1} \right\Vert}
+\newcommand{\abs}[1]{\left\vert {#1} \right\vert}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
 </script>
 </p>
 <h1 id="introduction">Introduction<a class="headerlink" href="#introduction" title="Permanent link">&para;</a></h1>
@@ -300,9 +308,9 @@ for k in keys(pm)
 end
 </code></pre>
 
-<p><img alt="" src="../figures/quasi_4_1.png" /> <img alt="" src="../figures/quasi_4_2.png" />
-<img alt="" src="../figures/quasi_4_3.png" /> <img alt="" src="../figures/quasi_4_4.png" />
-<img alt="" src="../figures/quasi_4_5.png" /> <img alt="" src="../figures/quasi_4_6.png" /></p>
+<pre><code>Error: The backend must not support the series type Val{:density}, and ther
+e isn't a series recipe defined.
+</code></pre>
 <pre><code class="julia">display(describe(chain[[keys(pm)...]]))
 </code></pre>
 
@@ -451,7 +459,9 @@ describe(chain[[&quot;β&quot;,&quot;σ&quot;,&quot;ρ&quot;,&quot;π&quot;]])
 plot(chain[[&quot;β&quot;,&quot;σ&quot;,&quot;ρ&quot;,&quot;π&quot;]])
 </code></pre>
 
-<p><img alt="" src="../figures/quasi_7_1.png" /></p>
+<pre><code>Error: The backend must not support the series type Val{:density}, and ther
+e isn't a series recipe defined.
+</code></pre>
 <h1 id="quasi-bayesian">Quasi-Bayesian<a class="headerlink" href="#quasi-bayesian" title="Permanent link">&para;</a></h1>
 <p>Consider the following GMM setup. We have a data-depenendent function
 $g_i(\theta)$ such that $\Er[g_i(\theta_0)] = 0$ . Let the usual GMM
@@ -473,8 +483,8 @@ $\frac{1}{\sqrt{n}} \sum  g_i(\theta_0) \to N(0, \Omega)$.</p>
 that also converges to
 $N\left(0, (D&rsquo;WD)^{-1}(D&rsquo;W\Omega W D)  (D&rsquo;WD)^{-1} \right)$ as
 $n\to \infty$.</p>
-<p>Let $\Sigma = (D&rsquo;WD)^{-1}(D&rsquo;W\Omega W D) (D&rsquo;WD)^{-1} \right)$. Note that
-the log density of the asymptotic distribution is</p>
+<p>Let $\Sigma = (D&rsquo;WD)^{-1}(D&rsquo;W\Omega W D) (D&rsquo;WD)^{-1}$. Note that the log
+density of the asymptotic distribution is</p>
 <p>
 <script type="math/tex; mode=display">
   p_\infty(\theta) \propto -\frac{n}{2}(\theta - \theta_0)' \Sigma^{-1} (\theta - \theta_0)
@@ -511,18 +521,19 @@ p_n( \sqrt{n}(\theta - \theta_0) ) \approx N\left( (D'WD)^{-1} \frac{1}{\sqrt{n}
 </p>
 <p>Finally, note that the usual asymptotic expansion of the GMM objective
 gives</p>
-<p>\$\$</p>
-<p><code>\sqrt{n}</code>( <code>\hat{\theta}</code>\^{GMM} - <code>\theta</code>_0 ) =
-(D’WD)\^{-1}
-<code>\frac{1}{\sqrt{n}}</code><code>\sum</code>g_i(<code>\theta</code>_0) +
-o_p(1), then</p>
+<p>
+<script type="math/tex; mode=display">
+\sqrt{n}( \hat{\theta}^{GMM} - \theta_0 ) = (D'WD)^{-1} \frac{1}{\sqrt{n}}\sum g_i(\theta_0) + o_p(1),
+</script>
+</p>
+<p>then</p>
 <p>
 <script type="math/tex; mode=display">
 p_n( \sqrt{n}(\theta - \theta_0) ) \approx N\left(\sqrt{n}(\hat{\theta}^{GMM} - \theta_0), D'WD \right)
 </script>
 </p>
 <p>That is, the quasi-posterior is approximately normal with mean equal to
-the usual GMM estimate, and variance $D&rsquo;WD$.</p>
+the usual GMM estimate and variance $D&rsquo;WD$.</p>
 <p>If we treat the quasi-posterior and as a real posterior, the
 quasi-posterior mean or median will be consistent since they each
 approach $\hat{\theta}^{GMM}$ and $\hat{\theta}^{GMM}$ is consistent.</p>
@@ -617,11 +628,9 @@ struct RCIVLogitQB{T,Stype}
   priors::typeof(defaultpriors)
   W::Matrix{T}
 end
-</code></pre>
 
-<pre><code>Error: invalid redefinition of constant RCIVLogitQB
-</code></pre>
-<pre><code class="julia">defaultpriors = (β=Normal(0,20),
+
+defaultpriors = (β=Normal(0,20),
                  σ=truncated(Normal(0, 10), 0, Inf))
 macro evalpriors(priors)
   first = true
@@ -657,15 +666,35 @@ end
 gh = gausshermite(3)
 ν = (gh[1],gh[2]/sqrt(Base.π))
 prob = RCIVLogitQB(data.x, data.z, max.(1,data.s[1:J,:])./M, N, J,ν , defaultpriors, diagm(ones(J*J)))
-θ0 = (β=pm.β, σ=pm.σ )
+</code></pre>
+
+<pre><code>Error: MethodError: no method matching RCIVLogitQB(::Array{Float64,2}, ::Ar
+ray{Float64,2}, ::Array{Float64,2}, ::Int64, ::Int64, ::Tuple{Array{Float64
+,1},Array{Float64,1}}, ::NamedTuple{(:β, :σ),Tuple{Normal{Float64},Truncate
+d{Normal{Float64},Continuous,Float64}}}, ::Array{Float64,2})
+Closest candidates are:
+  RCIVLogitQB(::Array{T,2}, ::Array{T,2}, ::Array{Stype,2}, ::Int64, ::Int6
+4, ::Tuple{Array{Float64,1},Array{Float64,1}}, !Matched::NamedTuple{(:β, :σ
+, :π, :ρ, :Σx, :Ω),Tuple{Normal{Float64},Truncated{Normal{Float64},Continuo
+us,Float64},Normal{Float64},Normal{Float64},Wishart{Float64,PDMats.PDMat{Fl
+oat64,Array{Float64,2}}},Wishart{Float64,PDMats.PDMat{Float64,Array{Float64
+,2}}}}}, ::Array{T,2}) where {T, Stype} at none:3
+</code></pre>
+<pre><code class="julia">θ0 = (β=pm.β, σ=pm.σ )
 prob(θ0)
-t=as((β = asℝ, σ=asℝ₊))
+</code></pre>
+
+<pre><code>Error: type NamedTuple has no field ξ
+</code></pre>
+<pre><code class="julia">t=as((β = asℝ, σ=asℝ₊))
 x0 = inverse(t, θ0)
 P = TransformedLogDensity(t, prob)
 ∇P = ADgradient(:ForwardDiff, P)
 LogDensityProblems.logdensity_and_gradient(∇P, x0);
 </code></pre>
 
+<pre><code>Error: type NamedTuple has no field ξ
+</code></pre>
 <p>The chain here actually takes very little time to run, but we still
 cache the results.</p>
 <pre><code class="julia">warmup=default_warmup_stages(stepsize_search=nothing, doubling_stages=2)
@@ -686,7 +715,9 @@ describe(chain[[&quot;β&quot;,&quot;σ&quot;]])
 plot(chain[[&quot;β&quot;,&quot;σ&quot;]])
 </code></pre>
 
-<p><img alt="" src="../figures/quasi_11_1.png" /></p>
+<pre><code>Error: The backend must not support the series type Val{:density}, and ther
+e isn't a series recipe defined.
+</code></pre>
 <p>The quasi-posterior means look okay. The standard deviation and
 quantiles are not consistent because we didn’t use an efficient
 weighting matrix above. Let’s use one and repeat.</p>
@@ -697,30 +728,40 @@ for i in 1:N
   ξ = delta(prob.s[:,i], prob.x[:,i], σ, ν) - prob.x[:,i]*β
   m[:,i] .= vec(ξ*prob.z[:,i]')
 end
-W = Symmetric(inv(cov(m')))
-
-prob = RCIVLogitQB(data.x, data.z, max.(1,data.s[1:J,:])./M, N, J,ν , defaultpriors,W)
 </code></pre>
 
-<pre><code>Error: MethodError: no method matching RCIVLogitQB(::Array{Float64,2}, ::Ar
-ray{Float64,2}, ::Array{Float64,2}, ::Int64, ::Int64, ::Tuple{Array{Float64
-,1},Array{Float64,1}}, ::NamedTuple{(:β, :σ),Tuple{Normal{Float64},Truncate
-d{Normal{Float64},Continuous,Float64}}}, ::Symmetric{Float64,Array{Float64,
-2}})
+<pre><code>Error: MethodError: no method matching delta(::Array{Int64,1}, ::Array{Floa
+t64,1}, ::Float64, ::Tuple{Array{Float64,1},Array{Float64,1}})
 Closest candidates are:
-  RCIVLogitQB(::Array{T,2}, ::Array{T,2}, ::Array{Stype,2}, ::Int64, ::Int6
-4, ::Tuple{Array{Float64,1},Array{Float64,1}}, ::NamedTuple{(:β, :σ),Tuple{
-Normal{Float64},Truncated{Normal{Float64},Continuous,Float64}}}, !Matched::
-Array{T,2}) where {T, Stype} at /home/paul/.julia/dev/Bayes101/docs/jmd/qb.
-jl:67
+  delta(::AbstractArray{T,1} where T, ::AbstractArray{T,1} where T, !Matche
+d::D, ::Tuple{Array{Float64,1},Array{Float64,1}}) where D&lt;:ForwardDiff.Dual
+ at none:5
+  delta(::AbstractArray{T,1}, !Matched::AbstractArray{T,1}, !Matched::T, ::
+Tuple{Array{Float64,1},Array{Float64,1}}) where T at none:4
+</code></pre>
+<pre><code class="julia">W = inv(cov(m'))
+</code></pre>
+
+<pre><code>Error: LAPACKException(1)
+</code></pre>
+<pre><code class="julia">prob = RCIVLogitQB(data.x, data.z, max.(1,data.s[1:J,:])./M, N, J,ν , defaultpriors,W)
+</code></pre>
+
+<pre><code>Error: UndefVarError: W not defined
 </code></pre>
 <pre><code class="julia">θ0 = (β=pm.β, σ=pm.σ )
 prob(θ0)
-P = TransformedLogDensity(t, prob)
+</code></pre>
+
+<pre><code>Error: type NamedTuple has no field ξ
+</code></pre>
+<pre><code class="julia">P = TransformedLogDensity(t, prob)
 ∇P = ADgradient(:ForwardDiff, P)
 LogDensityProblems.logdensity_and_gradient(∇P, x0);
 </code></pre>
 
+<pre><code>Error: type NamedTuple has no field ξ
+</code></pre>
 <pre><code class="julia">warmup=default_warmup_stages(stepsize_search=nothing, doubling_stages=2)
 results = DynamicHMC.mcmc_keep_warmup(Random.GLOBAL_RNG, ∇P, 1000;initialization = (q = x0, ϵ=1e-5 ), reporter = LogProgressReport(nothing, 25, 15), warmup_stages =warmup)
 JLD2.@save &quot;jmd/qbw.jld2&quot; results
@@ -736,7 +777,9 @@ describe(chain[[&quot;β&quot;,&quot;σ&quot;]])
 plot(chain[[&quot;β&quot;,&quot;σ&quot;]])
 </code></pre>
 
-<p><img alt="" src="../figures/quasi_14_1.png" /></p>
+<pre><code>Error: The backend must not support the series type Val{:density}, and ther
+e isn't a series recipe defined.
+</code></pre>
 <p>These posterior standard deviations and quantiles can be used for
 inference.</p>
 <h2 id="about">About<a class="headerlink" href="#about" title="Permanent link">&para;</a></h2>
