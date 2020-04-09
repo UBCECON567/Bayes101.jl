@@ -43,7 +43,7 @@ function simulateOLS(;N::Integer = Int(1e4), β = ones(4), σ = 1)
   y = x*β + randn(N)*σ
   return(x, y)
 end
-x, y = simulateOLS(N=Int(1e2), β=ones(2), σ=1)
+x, y = simulateOLS(N=Int(1e2), β=ones(2), σ=1);
 ```
 
 ## Computing Posteriors
@@ -86,7 +86,7 @@ $$
 $$
 then the posterior can be computed exactly. It is:
 $$
-    \beta|x, y, \sigma \sim N\left( (x'x/\sigma^2 + I/\tau^2)^{-1} x'y/\sigma^2,  (x'x/\sigma^2 + I/\tau^2)^{-1})
+    \beta|x, y, \sigma \sim N\left( (x'x/\sigma^2 + I/\tau^2)^{-1} x'y/\sigma^2,  (x'x/\sigma^2 + I/\tau^2)^{-1}\right)
 $$
 
 ```julia
@@ -128,9 +128,9 @@ When using Metropolis-Hastings, the proposal density plays a key
 role. The close the proposal is to the posterior, the faster the
 chain converges. 
 
-One common choice of proposal distribution is the random walk--- draw
+One common choice of proposal distribution is the random walk--draw
 candidate parameters from $N(\theta, s)$. Let's try it.
-  
+
 ```julia
 τ = 10.0
 k = size(x,2)
@@ -138,7 +138,7 @@ k = size(x,2)
 for s in [0.01, 0.1, 1.0, 10.0]
   rwβ = mhchain(zeros(k), Int(1e5), 
                 β->exp(loglike(β, σ, x, y)),
-                β->pdf(MvNormal(zeros(k), I*τ), β),
+                β->pdf(MvNormal(zeros(k), τ), β),
                 β->MvNormal(β, s*I))
 
   lims=(0.5, 1.5)
@@ -249,7 +249,7 @@ function hmcstep(θ, logdens, ϵ=0.1, L=5;
   return(u < α ? θnew : θ)
 end
 
-function hmcchain(θ0, iterations, logdens, ∇logdens=θ->Zygotes.gradient(logdens, θ)[1]
+function hmcchain(θ0, iterations, logdens, ∇logdens=θ->Zygote.gradient(logdens, θ)[1]
                   ; ϵ=0.1, L=5, M=I)
   θ = similar(θ0, length(θ0), iterations)
   θ[:,1] .= θ0
@@ -260,7 +260,7 @@ function hmcchain(θ0, iterations, logdens, ∇logdens=θ->Zygotes.gradient(logd
 end
 
 
-logp = β->(loglike(β, σ, x, y) + logpdf(MvNormal(zeros(k), I*τ), β))
+logp = β->(loglike(β, σ, x, y) + logpdf(MvNormal(zeros(k), τ), β))
 ∇logp(β) = ForwardDiff.gradient(logp, β)
 for ϵ in [1e-3, 0.1]
   for L in [2, 10]
@@ -285,15 +285,89 @@ proposals will get rejected. If $\epsilon L$ is too small, then the
 draws will be very close together, and it will take more iterations of
 the chain to explore the space. 
 
-The No-U-Turn-Sample (NUTS) ([@hoffman2014]) automatically
-chooses $L$ and $\epsilon$.
-[DynamicHMC.jl](https://github.com/tpapp/DynamicHMC.jl) is a Julia
-implementation. [Stan](https://mc-stan.org/) is (non-Julia, but
-callable from Julia) software for Bayesian modelling that largely uses
-NUTS for
-sampling. [Turing.jl](https://github.com/TuringLang/Turing.jl) is
-a probabilistic programming language (similar to STAN or BUGS), built on
-top of Julia.
+
+## NUTS
+
+The No-U-Turn-Sample (NUTS) ([@hoffman2014]) algorithmically chooses
+$L$, $\epsilon$, and $M$.  [Stan](https://mc-stan.org/) is (non-Julia,
+but callable from Julia) software for Bayesian modelling that largely
+uses NUTS for
+sampling. [DynamicHMC.jl](https://github.com/tpapp/DynamicHMC.jl) is a
+Julia implementation. Let's try it out.
+
+```julia
+using DynamicHMC, Random, LogDensityProblems
+struct LinearRegressionKnownSigma{T}
+  y::Vector{T}
+  x::Matrix{T}
+  σ::T
+  τ::T
+end
+function LogDensityProblems.capabilities(::Type{<:LinearRegressionKnownSigma})
+  LogDensityProblems.LogDensityOrder{0}()
+end
+LogDensityProblems.dimension(lr::LinearRegressionKnownSigma) = size(lr.x,2)
+function LogDensityProblems.logdensity(lr::LinearRegressionKnownSigma, β)
+  k = size(x,2)
+  return(logpdf(MvNormal(zeros(k), lr.τ), β) +   
+         loglikelihood(Normal(0, σ), y - x*β))
+end
+lr = LinearRegressionKnownSigma(y,x,σ,τ)
+∇logposterior=ADgradient(:Zygote, lr)
+
+@time results=DynamicHMC.mcmc_keep_warmup(Random.GLOBAL_RNG, ∇logposterior, 1000;
+                                          warmup_stages=
+                                          default_warmup_stages(init_steps=50,
+                                                                middle_steps=100,
+                                                                doubling_stages=2));
+dhβ = hcat(results.inference.chain...)
+h=histogram(dhβ', bins=100, labels=["β₁" "β₂"], fillalpha=0.5, linealpha=0,
+            normalize=:pdf, xlim=lims, legend=false)
+h2=histogram2d(dhβ[1,:], dhβ[2,:], xlim=lims, ylim=lims,
+               normalize=:pdf, alpha=0.5, legend=false)
+h2=contour!(h2, range(lims..., length=100), range(lims..., length=100),
+            (b1,b2)->posterior([b1,b2],σ, x, y, τ))
+display(plot(plot!(h,title="DynamicHMC (NUTS)"), h2,
+             plot(dhβ[:,1:100]', labels=["β₁" "β₂"], title="First 100 iterations", legend=false),
+             plot(dhβ', labels=["β₁" "β₂"], title="All iterations", legend=false),
+             layout=(2,2)))
+```
+
+See [this
+example](https://tamaspapp.eu/DynamicHMCExamples.jl/latest/example_linear_regression/)
+for a more canonical DynamicHMC linear regression implementation.
+
+## Turing.jl
+
+[Turing.jl](https://github.com/TuringLang/Turing.jl) is a
+probabilistic programming language (similar to STAN or BUGS), written
+in Julia. 
+
+```julia
+using Turing
+
+@model lreg(x, y, σ, τ) = begin
+  # prior
+  β ~ MvNormal(zeros(size(x,2)), τ)
+  # model
+  y ~ MvNormal(x*β,σ)
+end
+lr = lreg(x,y,σ,τ)
+
+@time cc = Turing.sample(lr, NUTS(0.65), 2000)
+tβ = cc.value[:,["β[1]","β[2]"],1]'
+h=histogram(tβ', bins=100, labels=["β₁" "β₂"], fillalpha=0.5, linealpha=0,
+            normalize=:pdf, xlim=lims, legend=false)
+h2=histogram2d(tβ[1,:], tβ[2,:], xlim=lims, ylim=lims,
+               normalize=:pdf, alpha=0.5, legend=false)
+h2=contour!(h2, range(lims..., length=100), range(lims..., length=100),
+            (b1,b2)->posterior([b1,b2],σ, x, y, τ))
+display(plot(plot!(h,title="Turing, NUTS"), h2,
+             plot(tβ[:,1:100]', labels=["β₁" "β₂"], title="First 100 iterations", legend=false),
+             plot(tβ', labels=["β₁" "β₂"], title="All iterations", legend=false),
+             layout=(2,2)))
+```
+
 
 ## About
 

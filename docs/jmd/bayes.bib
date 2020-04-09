@@ -53,4 +53,26 @@ abstract = "This paper studies computationally and theoretically attractive esti
               year={2014},
               url={http://www.jmlr.org/papers/volume15/hoffman14a/hoffman14a.pdf}
               }
-              
+
+
+@article{chung2015,
+author = {Yeojin Chung and Andrew Gelman and Sophia Rabe-Hesketh and Jingchen Liu and Vincent Dorie},
+title ={Weakly Informative Prior for Point Estimation of Covariance Matrices in Hierarchical Models},
+journal = {Journal of Educational and Behavioral Statistics},
+volume = {40},
+number = {2},
+pages = {136-157},
+year = {2015},
+doi = {10.3102/1076998615570945},
+
+URL = { 
+        https://doi.org/10.3102/1076998615570945
+    
+},
+eprint = { 
+        https://doi.org/10.3102/1076998615570945
+    
+}
+,
+    abstract = { When fitting hierarchical regression models, maximum likelihood (ML) estimation has computational (and, for some users, philosophical) advantages compared to full Bayesian inference, but when the number of groups is small, estimates of the covariance matrix (Σ) of group-level varying coefficients are often degenerate. One can do better, even from a purely point estimation perspective, by using a prior distribution or penalty function. In this article, we use Bayes modal estimation to obtain positive definite covariance matrix estimates. We recommend a class of Wishart (not inverse-Wishart) priors for Σ with a default choice of hyperparameters, that is, the degrees of freedom are set equal to the number of varying coefficients plus 2, and the scale matrix is the identity matrix multiplied by a value that is large relative to the scale of the problem. This prior is equivalent to independent gamma priors for the eigenvalues of Σ with shape parameter 1.5 and rate parameter close to 0. It is also equivalent to independent gamma priors for the variances with the same hyperparameters multiplied by a function of the correlation coefficients. With this default prior, the posterior mode for Σ is always strictly positive definite. Furthermore, the resulting uncertainty for the fixed coefficients is less underestimated than under classical ML or restricted maximum likelihood estimation. We also suggest an extension of our method that can be used when stronger prior information is available for some of the variances or correlations. }
+}

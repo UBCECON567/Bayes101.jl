@@ -7,7 +7,8 @@ runnotebook= "notebook" ∈ ARGS
 #runweave= true
 #runnotebook= false
 
-src= ARGS[1] 
+src= ARGS[1]
+#src = "jmd/quasi.jmd"
 
 if runweave
   println("weaving markdown for $src")
