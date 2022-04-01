@@ -12,13 +12,13 @@
         <link href="../css/bootstrap.min.css" rel="stylesheet">
         <link href="../css/font-awesome.min.css" rel="stylesheet">
         <link href="../css/base.css" rel="stylesheet">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/rainbow.min.css">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.5.0/styles/rainbow.min.css">
         <link href="../assets/Documenter.css" rel="stylesheet">
         <link href="../assets/extra.css" rel="stylesheet">
 
         <script src="../js/jquery-1.10.2.min.js" defer></script>
         <script src="../js/bootstrap.min.js" defer></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.5.0/highlight.min.js"></script>
         <script>hljs.initHighlightingOnLoad();</script> 
     </head>
 
@@ -131,10 +131,9 @@
 <p>This work is licensed under a <a href="http://creativecommons.org/licenses/by-sa/4.0/">Creative Commons Attribution-ShareAlike
 4.0 International
 License</a></p>
-<pre><code class="julia">using Plots, Distributions, StatsPlots
+<pre><code class="language-julia">using Plots, Distributions, StatsPlots
 Plots.pyplot()
 </code></pre>
-
 <pre><code>Plots.PyPlotBackend()
 </code></pre>
 <p>
@@ -158,12 +157,12 @@ economics more broadly, many applied models avoid placing distributional
 assumptions on error terms, and instead use GMM for estimation.</p>
 <p>There are two ways to convert a GMM model into something suitable for
 Bayesian methods. One is to just add distributional assumptions to the
-error terms. (Jiang, Manchanda, and Rossi <a href="#ref-jiang2009">2009</a>)
-applies this approach to a random coefficients demand model.</p>
-<p>A second approach is the Quasi-Bayesian approach of (Chernozhukov and
-Hong <a href="#ref-chernozhukov2003">2003</a>). In this approach, you simply use
-the GMM objective function in place of the likelihood. We will look at
-it in some detail.</p>
+error terms. <script type="math/tex; mode=display">@jiang2009</script> applies this approach to a random
+coefficients demand model.</p>
+<p>A second approach is the Quasi-Bayesian approach of
+<script type="math/tex; mode=display">@chernozhukov2003</script>. In this approach, you simply use the GMM
+objective function in place of the likelihood. We will look at it in
+some detail.</p>
 <h1 id="random-coefficients-iv-logit">Random Coefficients IV Logit<a class="headerlink" href="#random-coefficients-iv-logit" title="Permanent link">&para;</a></h1>
 <p>As a working example, we’ll use a random coefficients multinomial logit
 with endogeneity. To keep things simple for illustrustration, we’ll
@@ -215,7 +214,7 @@ the downside of putting an extra layer of abstraction between us and the
 core computations. This ends up costing us a bit of computation time,
 and arguably making the posterior calculation harder to debug and
 extend.</p>
-<pre><code class="julia">using Turing, FastGaussQuadrature, LinearAlgebra, NNlib, JLD2
+<pre><code class="language-julia">using Turing, FastGaussQuadrature, LinearAlgebra, JLD2, NNlib
 
 @model rcivlogit(x=missing, z=missing, s=missing,
                  M=100, ν=gausshermite(12),
@@ -264,22 +263,33 @@ pm = (β=-1.0, σ=0.1, ρ=0.5, Σx=diagm(ones(J)), Ω=I+0.5*ones(J,J), π=1.0)
 N = 20
 M = 100
 # simulate the data
-data=rcivlogit(missing, missing ,missing, M, gausshermite(3), pm, N, J)();
-</code></pre>
+data=rcivlogit(missing, missing ,missing, M, gausshermite(3), pm, N, J, Float64)();
 
+# not sure why x, s, z are Array{Any}, but it will cause problems later, so fix it
+data = (x=Float64.(data.x), s=Int64.(data.s), z=Float64.(data.z), ξ=Float64.(data.ξ))
+</code></pre>
+<pre><code>(x = [0.3080674020252345 1.2924928561284428 … -0.7869716813520236 1.9446989
+2946658; 0.06650115378043547 -2.411374760035832 … 2.1966960670966156 0.0402
+4549787601028], s = [46 0 … 89 8; 18 98 … 1 57; 36 2 … 10 35], z = [0.39568
+33094578045 0.1361681748385206 … -0.7850796961531921 0.9336527852117569; 0.
+7778727538844737 -1.028226009209259 … 0.9892776703471098 1.0613000244887347
+], ξ = [0.7618807017867174 -0.2833493017359674 … 1.822650869007666 0.190737
+88248784262; -0.5718480848301717 2.3872147427000687 … -0.3738327914137143 0
+.5019760296558329])
+</code></pre>
 <p>Some remarks on the code</p>
 <ul>
 <li>
-<p>When a Turing model is passed missing arguments, it sample them from
-    the specified distributions. When the arguments are not missing,
-    they’re treated as data and held fixed while calculating the
-    posterior.</p>
+<p>When a Turing model is passed missing arguments, it samples them
+    from the specified distributions. When the arguments are not
+    missing, they’re treated as data and held fixed while calculating
+    the posterior.</p>
 </li>
 <li>
 <p>We use Gauss Hermite quadrature to integrate out the random
     coefficient. 3 integration points is not going to calculate the
-    integral very accurately, but, since we use the same integration
-    approach during estimation it will work out well.</p>
+    integral very accurately, but we will use the same integration
+    approach during estimation. so it will work out well.</p>
 </li>
 </ul>
 <p>The Wishart prior distributions for the covariance matrices are not
@@ -287,67 +297,66 @@ entirely standard. The <strong>inverse</strong> Wishart distribution is the conj
 prior for the covariance matrix of a Normal distribution, and is a
 common choice. However, when using HMC for sampling, conjugate priors do
 not matter. The modern view is that the inverse Wishart puts too much
-weight on covariances with high correlation, and other priors. The
-Wishart prior follows the advice of (Chung et al.
-<a href="#ref-chung2015">2015</a>), and helps to avoid regions with degenerate
-covariance matrices (which were causing numeric problems during the
-tuning stages of NUTS with other priors, like the LKJ distribution).</p>
+weight on covariances with high correlation, and other priors are
+preferred. The Wishart prior follows the advice of <script type="math/tex; mode=display">@chung2015</script>, and
+helps to avoid regions with degenerate covariance matrices (which were
+causing numeric problems during the tuning stages of NUTS with other
+priors, like the LKJ distribution).</p>
 <h3 id="results">Results<a class="headerlink" href="#results" title="Permanent link">&para;</a></h3>
 <p>We can sample from the posterior with the following code. It takes some
 time to run.</p>
-<pre><code class="julia">model = rcivlogit(data.x, data.z, data.s, M, gausshermite(3), missing, N,J)
+<pre><code class="language-julia">model = rcivlogit(data.x, data.z, data.s, M, gausshermite(3), missing, N,J)
 chain = Turing.sample(model, NUTS(0.65), 1000, progress=true, verbose=true)
-JLD2.@save &quot;jmd/turing.jld2&quot; chain model data
+dir = @__DIR__
+JLD2.@save &quot;$dir/turing.jld2&quot; chain model data
 </code></pre>
-
 <p>Let’s look at the posteriors. The chain also contains posteriors for all
 $JN$ values of $\xi$, which are not going to be displayed.</p>
-<pre><code class="julia">JLD2.@load &quot;jmd/turing.jld2&quot; chain model data
+<pre><code class="language-julia">dir = @__DIR__
+JLD2.@load &quot;$dir/turing.jld2&quot; chain model data
+chkeys = Symbol[]
 for k in keys(pm)
-  display(plot(chain[k]))
+  for ck ∈ filter(x-&gt;occursin(Regex(String(k)),String(x)), keys(chain))
+    push!(chkeys, ck)
+  end
 end
+display(plot(chain[chkeys]))
+display(describe(chain[chkeys])[1])
 </code></pre>
+<pre><code>Summary Statistics
+  parameters      mean       std   naive_se      mcse        ess      rhat 
+  e ⋯
+      Symbol   Float64   Float64    Float64   Float64    Float64   Float64 
+    ⋯
 
-<p><img alt="" src="../figures/quasi_4_1.png" /> <img alt="" src="../figures/quasi_4_2.png" />
-<img alt="" src="../figures/quasi_4_3.png" /> <img alt="" src="../figures/quasi_4_4.png" />
-<img alt="" src="../figures/quasi_4_5.png" /> <img alt="" src="../figures/quasi_4_6.png" /></p>
-<pre><code class="julia">display(describe(chain[[keys(pm)...]]))
+           β   -1.2672    0.2351     0.0074    0.0134   299.1729    1.0027 
+    ⋯
+           σ    0.2406    0.1716     0.0054    0.0091   441.3357    0.9990 
+    ⋯
+           ρ    0.5917    0.1381     0.0044    0.0059   664.6632    0.9990 
+    ⋯
+     Σx[1,1]    1.0314    0.5746     0.0182    0.0215   597.1121    0.9990 
+    ⋯
+     Σx[2,1]   -0.3465    0.4802     0.0152    0.0176   726.5552    1.0042 
+    ⋯
+     Σx[1,2]   -0.3465    0.4802     0.0152    0.0176   726.5552    1.0042 
+    ⋯
+     Σx[2,2]    2.1226    1.0410     0.0329    0.0520   242.8227    1.0238 
+    ⋯
+      Ω[1,1]    3.5134    2.2180     0.0701    0.1122   410.5804    1.0026 
+    ⋯
+      Ω[2,1]    1.7739    1.4999     0.0474    0.0590   617.1522    0.9994 
+    ⋯
+      Ω[1,2]    1.7739    1.4999     0.0474    0.0590   617.1522    0.9994 
+    ⋯
+      Ω[2,2]    4.7052    2.2265     0.0704    0.0999   462.3636    0.9997 
+    ⋯
+           π    1.0303    0.2074     0.0066    0.0091   547.4500    0.9993 
+    ⋯
+                                                                1 column om
+itted
 </code></pre>
-
-<pre><code>2-element Array{ChainDataFrame,1}
-
-Summary Statistics
-  parameters     mean     std  naive_se    mcse       ess   r_hat
-  ──────────  ───────  ──────  ────────  ──────  ────────  ──────
-    Σx[1, 1]   3.0778  1.3840    0.0619  0.0960  120.1318  1.0019
-    Σx[1, 2]   1.0670  0.8911    0.0399  0.0712  158.8332  1.0025
-    Σx[2, 1]   1.0670  0.8911    0.0399  0.0712  158.8332  1.0025
-    Σx[2, 2]   2.1036  0.9176    0.0410  0.0595  348.2472  1.0059
-     Ω[1, 1]   2.4330  1.6947    0.0758  0.1013  153.8935  1.0009
-     Ω[1, 2]   0.8539  1.1533    0.0516  0.0817  161.7063  1.0019
-     Ω[2, 1]   0.8539  1.1533    0.0516  0.0817  161.7063  1.0019
-     Ω[2, 2]   2.7162  1.2958    0.0579  0.0726  281.2821  0.9985
-           β  -0.9214  0.2821    0.0126  0.0385   62.2979  1.0289
-           π   1.0659  0.2592    0.0116  0.0070  292.6790  0.9984
-           ρ   0.2482  0.3257    0.0146  0.0335  100.6957  1.0181
-           σ   0.2897  0.1845    0.0083  0.0100  212.8711  0.9984
-
-Quantiles
-  parameters     2.5%    25.0%    50.0%    75.0%    97.5%
-  ──────────  ───────  ───────  ───────  ───────  ───────
-    Σx[1, 1]   0.9943   2.0881   2.8644   3.9272   6.2623
-    Σx[1, 2]  -0.2738   0.4539   0.9735   1.5556   3.2447
-    Σx[2, 1]  -0.2738   0.4539   0.9735   1.5556   3.2447
-    Σx[2, 2]   0.9298   1.4544   1.8973   2.5971   4.2834
-     Ω[1, 1]   0.7670   1.4292   1.9901   2.8824   6.4902
-     Ω[1, 2]  -0.9247   0.1637   0.7029   1.2866   3.8990
-     Ω[2, 1]  -0.9247   0.1637   0.7029   1.2866   3.8990
-     Ω[2, 2]   1.1296   1.8870   2.3947   3.2030   5.7431
-           β  -1.5187  -1.0873  -0.9218  -0.7284  -0.3709
-           π   0.4887   0.9059   1.0715   1.2454   1.5612
-           ρ  -0.4314   0.0055   0.2708   0.4913   0.8023
-           σ   0.0165   0.1439   0.2621   0.4246   0.6918
-</code></pre>
+<p><img alt="" src="../figures/quasi_4_1.png" /></p>
 <p>We can see that the chain mixed pretty well. The posterior of the
 covariance matrices are somewhat high, but the other posteriors of the
 other parameters appear centered on their true values. Poorly estimated
@@ -359,7 +368,7 @@ must write a function to evaluate the log posterior. This is arguably
 slightly more work than Turing’s modeling language (although it avoids
 needing to learn Turing’s language), but it also gives you more control
 over the code. This tends to result in more efficient code.</p>
-<pre><code class="julia">using DynamicHMC, Random, LogDensityProblems, Parameters, TransformVariables, Distributions, MCMCChains
+<pre><code class="language-julia">using DynamicHMC, Random, LogDensityProblems, Parameters, TransformVariables, Distributions, MCMCChains
 
 defaultpriors = (β=Normal(0,20),
                  σ=truncated(Normal(0, 10), 0, Inf),
@@ -393,7 +402,7 @@ struct RCIVLogit{T,Stype}
 end
 
 
-# A
+# evaluate the log posterior
 function (d::RCIVLogit)(θ)
   @unpack ξ, β, σ, π, ρ, sξ, uξ, sx, ux = θ
   @unpack x, z, s, N, J, ν = d
@@ -440,46 +449,27 @@ x0 = inverse(t, θ0)
 P = TransformedLogDensity(t, prob)
 ∇P = ADgradient(:ForwardDiff, P);
 </code></pre>
-
-<pre><code class="julia">warmup_stages = default_warmup_stages(;doubling_stages=2, M=Symmetric)
+<pre><code class="language-julia">warmup_stages = default_warmup_stages(;doubling_stages=2, M=Symmetric)
 results = DynamicHMC.mcmc_keep_warmup(Random.GLOBAL_RNG, ∇P, 1000;
                                       initialization = (q = x0, ),
                                       reporter = LogProgressReport(nothing, 25, 15),
                                       warmup_stages=warmup_stages)
-JLD2.@save &quot;jmd/dhmc.jld2&quot; results
+JLD2.@save &quot;$dir/dhmc.jld2&quot; results
 </code></pre>
-
-<pre><code class="julia">JLD2.@load &quot;jmd/dhmc.jld2&quot; results
+<pre><code class="language-julia">JLD2.@load &quot;$dir/dhmc.jld2&quot; results
 post = transform.(t,results.inference.chain)
 p = post[1]
 names = vcat([length(p[s])==1 ? String(s) : String.(s).*string.(1:length(p[s])) for s in keys(p)]...)
 vals = hcat([vcat([length(v)==1 ? v : vec(v) for v in values(p)]...) for p in post]...)'
 chain = MCMCChains.Chains(reshape(vals, size(vals)..., 1), names)
 display(plot(chain[[&quot;β&quot;,&quot;σ&quot;,&quot;ρ&quot;,&quot;π&quot;]]))
+display(describe(chain[[&quot;β&quot;,&quot;σ&quot;,&quot;ρ&quot;,&quot;π&quot;]]))
 </code></pre>
-
+<pre><code>2-element Vector{ChainDataFrame}:
+ Summary Statistics (4 x 7)
+ Quantiles (4 x 6)
+</code></pre>
 <p><img alt="" src="../figures/quasi_7_1.png" /></p>
-<pre><code class="julia">display(describe(chain[[&quot;β&quot;,&quot;σ&quot;,&quot;ρ&quot;,&quot;π&quot;]]))
-</code></pre>
-
-<pre><code>2-element Array{ChainDataFrame,1}
-
-Summary Statistics
-  parameters     mean     std  naive_se    mcse        ess   r_hat
-  ──────────  ───────  ──────  ────────  ──────  ─────────  ──────
-           β  -1.0440  0.2041    0.0065  0.0058   738.5279  0.9998
-           σ   0.1854  0.1318    0.0042  0.0050   683.0208  0.9998
-           π   0.9668  0.1519    0.0048  0.0035  1026.2301  1.0004
-           ρ   0.4984  0.1517    0.0048  0.0048  1094.7487  0.9992
-
-Quantiles
-  parameters     2.5%    25.0%    50.0%    75.0%    97.5%
-  ──────────  ───────  ───────  ───────  ───────  ───────
-           β  -1.4799  -1.1795  -1.0267  -0.8981  -0.6998
-           σ   0.0109   0.0819   0.1597   0.2736   0.4917
-           π   0.6688   0.8708   0.9730   1.0664   1.2728
-           ρ   0.1618   0.4114   0.5116   0.5994   0.7657
-</code></pre>
 <h1 id="quasi-bayesian">Quasi-Bayesian<a class="headerlink" href="#quasi-bayesian" title="Permanent link">&para;</a></h1>
 <p>Consider the following GMM setup. We have a data-depenendent function
 $g_i(\theta)$ such that $\Er[g_i(\theta_0)] = 0$ . Let the usual GMM
@@ -564,13 +554,12 @@ efficient weighting matrix, $W=\Omega^{-1}$, then the quasi-posterior
 credible intervals will be consistent.</p>
 <p>See <a href="https://ocw.mit.edu/courses/economics/14-385-nonlinear-econometric-analysis-fall-2007/lecture-notes/lecture10_11.pdf">these
 notes</a>
-for more information, or (Chernozhukov and Hong
-<a href="#ref-chernozhukov2003">2003</a>) for complete details.</p>
+for more information, or <script type="math/tex; mode=display">@chernozhukov2003</script> for complete details.</p>
 <h2 id="implementation">Implementation<a class="headerlink" href="#implementation" title="Permanent link">&para;</a></h2>
 <p>To compute moment conditions, we need to solve for $\xi$ given the
 parameters. Here’s the associated code. It’s similar to what we used in
 <a href="https://github.com/UBCECON567/BLPDemand.jl">BLPDemand.jl</a>.</p>
-<pre><code class="julia">using DynamicHMC, Random, LogDensityProblems, Parameters, TransformVariables, Distributions, ForwardDiff, NLsolve
+<pre><code class="language-julia">using DynamicHMC, Random, LogDensityProblems, Parameters, TransformVariables, Distributions, ForwardDiff, NLsolve
 
 function share(δ::AbstractVector, σ, x::AbstractVector, ν::typeof(gausshermite(1)))
   J = length(δ)
@@ -630,11 +619,10 @@ function delta(s::AbstractVector, x::AbstractVector,
   return(out)
 end
 </code></pre>
-
 <pre><code>delta (generic function with 2 methods)
 </code></pre>
 <p>Now the code for the quasi-posterior.</p>
-<pre><code class="julia">using DynamicHMC, Random, LogDensityProblems, Parameters, TransformVariables, Distributions
+<pre><code class="language-julia">using DynamicHMC, Random, LogDensityProblems, Parameters, TransformVariables, Distributions
 defaultpriors = (β=Normal(0,20),
                  σ=truncated(Normal(0, 10), 0, Inf))
 
@@ -691,49 +679,34 @@ P = TransformedLogDensity(t, prob)
 ∇P = ADgradient(:ForwardDiff, P)
 LogDensityProblems.logdensity_and_gradient(∇P, x0);
 </code></pre>
-
 <p>The chain here actually takes very little time to run, but we still
 cache the results.</p>
-<pre><code class="julia">warmup=default_warmup_stages(stepsize_search=nothing, doubling_stages=2)
+<pre><code class="language-julia">warmup=default_warmup_stages(stepsize_search=nothing, doubling_stages=2)
 results = DynamicHMC.mcmc_keep_warmup(Random.GLOBAL_RNG, ∇P, 1000;
                                       initialization = (q = x0, ϵ=1e-5 ),
                                       reporter = LogProgressReport(nothing, 25, 15),
                                       warmup_stages =warmup)
-JLD2.@save &quot;jmd/qb.jld2&quot; results
+JLD2.@save &quot;$dir/qb.jld2&quot; results
 </code></pre>
-
-<pre><code class="julia">JLD2.@load &quot;jmd/qb.jld2&quot; results
+<pre><code class="language-julia">JLD2.@load &quot;$dir/qb.jld2&quot; results
 post = transform.(t,results.inference.chain)
 p = post[1]
 names = vcat([length(p[s])==1 ? String(s) : String.(s).*string.(1:length(p[s])) for s in keys(p)]...)
 vals = hcat([vcat([length(v)==1 ? v : vec(v) for v in values(p)]...) for p in post]...)'
 chain = MCMCChains.Chains(reshape(vals, size(vals)..., 1), names)
 display(describe(chain[[&quot;β&quot;,&quot;σ&quot;]]))
+display(plot(chain[[&quot;β&quot;,&quot;σ&quot;]]))
 </code></pre>
-
-<pre><code>2-element Array{ChainDataFrame,1}
-
-Summary Statistics
-  parameters     mean     std  naive_se    mcse       ess   r_hat
-  ──────────  ───────  ──────  ────────  ──────  ────────  ──────
-           β  -1.1265  0.1489    0.0047  0.0079  417.6520  0.9998
-           σ   0.2925  0.2147    0.0068  0.0155  208.2311  0.9997
-
-Quantiles
-  parameters     2.5%    25.0%    50.0%    75.0%    97.5%
-  ──────────  ───────  ───────  ───────  ───────  ───────
-           β  -1.4356  -1.2249  -1.1238  -1.0214  -0.8575
-           σ   0.0169   0.1181   0.2508   0.4264   0.8112
+<pre><code>2-element Vector{ChainDataFrame}:
+ Summary Statistics (2 x 7)
+ Quantiles (2 x 6)
 </code></pre>
-<pre><code class="julia">display(plot(chain[[&quot;β&quot;,&quot;σ&quot;]]))
-</code></pre>
-
 <p><img alt="" src="../figures/quasi_11_1.png" /></p>
 <p>The quasi-posterior means look okay. The standard deviation and
 quantiles are not consistent because we didn’t use an efficient
 weighting matrix above. Let’s use one and repeat.</p>
-<pre><code class="julia">σ = mean(chain[&quot;σ&quot;].value)
-β = mean(chain[&quot;β&quot;].value)
+<pre><code class="language-julia">σ = mean(chain[:σ])
+β = mean(chain[:β])
 m = zeros(J*J, N)
 for i in 1:N
   ξ = delta(prob.s[:,i], prob.x[:,i], σ, ν) - prob.x[:,i]*β
@@ -748,38 +721,23 @@ P = TransformedLogDensity(t, prob)
 ∇P = ADgradient(:ForwardDiff, P)
 LogDensityProblems.logdensity_and_gradient(∇P, x0);
 </code></pre>
-
-<pre><code class="julia">warmup=default_warmup_stages(stepsize_search=nothing, doubling_stages=2)
+<pre><code class="language-julia">warmup=default_warmup_stages(stepsize_search=nothing, doubling_stages=2)
 results = DynamicHMC.mcmc_keep_warmup(Random.GLOBAL_RNG, ∇P, 1000;initialization = (q = x0, ϵ=1e-5 ), reporter = LogProgressReport(nothing, 25, 15), warmup_stages =warmup)
-JLD2.@save &quot;jmd/qbw.jld2&quot; results
+JLD2.@save &quot;$dir/qbw.jld2&quot; results
 </code></pre>
-
-<pre><code class="julia">JLD2.@load &quot;jmd/qbw.jld2&quot; results
+<pre><code class="language-julia">JLD2.@load &quot;$dir/qbw.jld2&quot; results
 post = transform.(t,results.inference.chain)
 p = post[1]
 names = vcat([length(p[s])==1 ? String(s) : String.(s).*string.(1:length(p[s])) for s in keys(p)]...)
 vals = hcat([vcat([length(v)==1 ? v : vec(v) for v in values(p)]...) for p in post]...)'
 chain = MCMCChains.Chains(reshape(vals, size(vals)..., 1), names)
 display(describe(chain[[&quot;β&quot;,&quot;σ&quot;]]))
+display(plot(chain[[&quot;β&quot;,&quot;σ&quot;]]))
 </code></pre>
-
-<pre><code>2-element Array{ChainDataFrame,1}
-
-Summary Statistics
-  parameters     mean     std  naive_se    mcse      ess   r_hat
-  ──────────  ───────  ──────  ────────  ──────  ───────  ──────
-           β  -1.1757  0.2060    0.0065  0.0347  29.4229  1.0387
-           σ   0.5242  0.3871    0.0122  0.0627  30.9115  1.0478
-
-Quantiles
-  parameters     2.5%    25.0%    50.0%    75.0%    97.5%
-  ──────────  ───────  ───────  ───────  ───────  ───────
-           β  -1.7089  -1.2582  -1.1236  -1.0288  -0.8945
-           σ   0.0142   0.2108   0.4485   0.7655   1.3978
+<pre><code>2-element Vector{ChainDataFrame}:
+ Summary Statistics (2 x 7)
+ Quantiles (2 x 6)
 </code></pre>
-<pre><code class="julia">display(plot(chain[[&quot;β&quot;,&quot;σ&quot;]]))
-</code></pre>
-
 <p><img alt="" src="../figures/quasi_14_1.png" /></p>
 <p>These posterior standard deviations and quantiles can be used for
 inference.</p>
@@ -787,27 +745,7 @@ inference.</p>
 <p>This meant to accompany <a href="https://faculty.arts.ubc.ca/pschrimpf/565/11-bayesianEstimation.pdf">these slides on Bayesian methods in
 IO.</a></p>
 <p>This document was created using Weave.jl. The code is available in <a href="https://github.com/UBCECON567/Bayes101.jl">on
-github</a>.</p>
-<div class="references hanging-indent" id="refs">
-<div id="ref-chernozhukov2003">
-<p>Chernozhukov, Victor, and Han Hong. 2003. “An {Mcmc} Approach to
-Classical Estimation.” <em>Journal of Econometrics</em> 115 (2): 293–346.
-<a href="https://doi.org/http://dx.doi.org/10.1016/S0304-4076(03)00100-3">https://doi.org/http://dx.doi.org/10.1016/S0304-4076(03)00100-3</a>.</p>
-</div>
-<div id="ref-chung2015">
-<p>Chung, Yeojin, Andrew Gelman, Sophia Rabe-Hesketh, Jingchen Liu, and
-Vincent Dorie. 2015. “Weakly Informative Prior for Point Estimation of
-Covariance Matrices in Hierarchical Models.” <em>Journal of Educational and
-Behavioral Statistics</em> 40 (2): 136–57.
-<a href="https://doi.org/10.3102/1076998615570945">https://doi.org/10.3102/1076998615570945</a>.</p>
-</div>
-<div id="ref-jiang2009">
-<p>Jiang, R., P. Manchanda, and P. E. Rossi. 2009. “Bayesian Analysis of
-Random Coefficient Logit Models Using Aggregate Data.” <em>Journal of
-Econometrics</em> 149 (2): 136–48.
-<a href="http://www.sciencedirect.com/science/article/pii/S0304407608002297">http://www.sciencedirect.com/science/article/pii/S0304407608002297</a>.</p>
-</div>
-</div></div>
+github</a>.</p></div>
             </div>
         </div>
 
@@ -833,16 +771,13 @@ Econometrics</em> 149 (2): 136–48.
                 <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
             </div>
             <div class="modal-body">
-                <p>
-                    From here you can search these documents. Enter
-                    your search terms below.
-                </p>
+                <p>From here you can search these documents. Enter your search terms below.</p>
                 <form>
                     <div class="form-group">
-                        <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                        <input type="search" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
                     </div>
                 </form>
-                <div id="mkdocs-search-results"></div>
+                <div id="mkdocs-search-results" data-no-results-text="No results found"></div>
             </div>
             <div class="modal-footer">
             </div>
